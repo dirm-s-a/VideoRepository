@@ -1,0 +1,24 @@
+# ============================================================
+# Docker Compose - Repositorio Central de Videos
+# ============================================================
+# Se despliega en UN servidor central de la LAN.
+# Los llamadores se conectan via HTTP a este servicio.
+#
+# Uso:
+#   docker compose up -d          # Levantar
+#   docker compose logs -f        # Ver logs
+#   docker compose down           # Apagar
+# ============================================================
+
+services:
+  video-repository:
+    build: .
+    ports:
+      - "3002:3000"
+    volumes:
+      # Persistir videos y base de datos SQLite
+      - video-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  video-data:

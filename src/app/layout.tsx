@@ -1,0 +1,69 @@
+"use client";
+
+import "./globals.css";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Film,
+  ListMusic,
+  Activity,
+  Server,
+} from "lucide-react";
+
+const navItems = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/videos", label: "Videos", icon: Film },
+  { href: "/playlists", label: "Playlists", icon: ListMusic },
+  { href: "/status", label: "Estado", icon: Activity },
+];
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+
+  return (
+    <html lang="es">
+      <body className="bg-gray-50 text-gray-900 min-h-screen flex">
+        {/* Sidebar */}
+        <aside className="w-64 bg-gray-900 text-white flex flex-col shrink-0">
+          <div className="p-4 border-b border-gray-700 flex items-center gap-2">
+            <Server className="w-6 h-6 text-blue-400" />
+            <h1 className="text-lg font-bold">Video Repository</h1>
+          </div>
+          <nav className="flex-1 p-2">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive =
+                pathname === item.href ||
+                (item.href !== "/" && pathname.startsWith(item.href));
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${
+                    isActive
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="p-4 border-t border-gray-700 text-xs text-gray-500">
+            Video Repository v1.0
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main className="flex-1 overflow-auto">{children}</main>
+      </body>
+    </html>
+  );
+}
