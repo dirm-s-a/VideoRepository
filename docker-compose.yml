@@ -5,21 +5,27 @@
 # Los llamadores se conectan via HTTP a este servicio.
 #
 # Uso:
-#   docker compose up -d          # Levantar
-#   docker compose logs -f        # Ver logs
-#   docker compose down           # Apagar
+#   docker compose up -d --build   # Construir y levantar
+#   docker compose logs -f         # Ver logs
+#   docker compose down            # Apagar
+#
+# Nginx reverse proxy:
+#   videorepository.dim.com.ar → localhost:3002 → container:3000
 # ============================================================
 
 services:
   video-repository:
-    build: .
+    build:
+      context: .
+      args:
+        JWT_SECRET: ${JWT_SECRET:-video-repo-secret-dim-2026}
     ports:
-      - "3002:3000"
+      - "127.0.0.1:3002:3000"
     volumes:
       # Persistir videos y base de datos SQLite
       - video-data:/app/data
-    # environment:
-    #   - JWT_SECRET=custom-secret-here  # Must match build-time ARG
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-video-repo-secret-dim-2026}
     restart: unless-stopped
 
 volumes:
