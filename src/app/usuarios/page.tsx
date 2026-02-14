@@ -1,7 +1,19 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Users, Plus, Trash2, KeyRound, RefreshCw, X } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import {
+  Users,
+  Plus,
+  Trash2,
+  KeyRound,
+  RefreshCw,
+  X,
+  Search,
+  Download,
+} from "lucide-react";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import { DataGrid } from "@/shared/ui/DataGrid";
+import { useDataGridExport } from "@/shared/ui/useDataGridExport";
 
 interface User {
   id: number;
@@ -17,6 +29,8 @@ export default function UsuariosPage() {
   const [changePasswordUser, setChangePasswordUser] = useState<User | null>(
     null
   );
+  const [quickFilter, setQuickFilter] = useState("");
+  const [displayedCount, setDisplayedCount] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,8 +64,106 @@ export default function UsuariosPage() {
     }
   }
 
+  const columnDefs = useMemo<ColDef<User>[]>(
+    () => [
+      {
+        field: "username",
+        headerName: "Usuario",
+        flex: 2,
+        minWidth: 200,
+        cellRenderer: (params: ICellRendererParams<User>) => {
+          if (!params.data) return null;
+          return (
+            <div className="flex items-center gap-2 h-full">
+              <span className="font-medium">{params.data.username}</span>
+              {params.data.id === currentUserId && (
+                <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-600">
+                  tu
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        field: "created_at",
+        headerName: "Creado",
+        width: 170,
+        valueFormatter: (params: { value: string }) => {
+          if (!params.value) return "";
+          const d = new Date(params.value + "Z");
+          return d.toLocaleString("es-AR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        },
+      },
+      {
+        headerName: "Acciones",
+        width: 220,
+        sortable: false,
+        filter: false,
+        pinned: "right",
+        cellRenderer: (params: ICellRendererParams<User>) => {
+          if (!params.data) return null;
+          const user = params.data;
+          const isAdmin = user.username.toLowerCase() === "admin";
+          const isSelf = user.id === currentUserId;
+          return (
+            <div className="flex items-center gap-1 h-full">
+              <button
+                onClick={() => setChangePasswordUser(user)}
+                className="flex items-center gap-1 rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                title="Cambiar clave"
+              >
+                <KeyRound className="h-3.5 w-3.5" />
+                Cambiar Clave
+              </button>
+              <button
+                onClick={() => handleDelete(user)}
+                disabled={isSelf || isAdmin}
+                className="flex items-center gap-1 rounded px-2 py-1 text-xs text-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
+                title={
+                  isAdmin
+                    ? "El usuario admin no se puede eliminar"
+                    : isSelf
+                      ? "No se puede eliminar el usuario actual"
+                      : "Eliminar"
+                }
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Eliminar
+              </button>
+            </div>
+          );
+        },
+      },
+    ],
+    [currentUserId]
+  );
+
+  // Export setup
+  const exportColumns = useMemo(
+    () => [
+      { header: "ID", field: "id", width: 10 },
+      { header: "Usuario", field: "username", width: 30 },
+      { header: "Creado", field: "created_at", width: 25 },
+    ],
+    []
+  );
+
+  const { exportToExcel, exportToPdf, exportToCsv } = useDataGridExport({
+    data: users,
+    columns: exportColumns,
+    fileName: "usuarios",
+    title: "Listado de Usuarios",
+  });
+
   return (
-    <div className="p-8">
+    <div className="flex h-full flex-col p-8">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <h1 className="flex items-center gap-2 text-2xl font-bold">
@@ -75,88 +187,69 @@ export default function UsuariosPage() {
         </div>
       </div>
 
-      {/* Users table */}
-      <div className="overflow-hidden rounded-lg border bg-white">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">
-                Usuario
-              </th>
-              <th className="px-4 py-3 text-left font-medium text-gray-600">
-                Creado
-              </th>
-              <th className="px-4 py-3 text-right font-medium text-gray-600">
-                Acciones
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-gray-400">
-                  Cargando...
-                </td>
-              </tr>
-            ) : users.length === 0 ? (
-              <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-gray-400">
-                  No hay usuarios
-                </td>
-              </tr>
-            ) : (
-              users.map((user) => (
-                <tr
-                  key={user.id}
-                  className="border-b last:border-0 hover:bg-gray-50"
-                >
-                  <td className="px-4 py-3 font-medium">
-                    {user.username}
-                    {user.id === currentUserId && (
-                      <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-600">
-                        tu
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {new Date(user.created_at + "Z").toLocaleDateString("es-AR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                    })}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-1">
-                      <button
-                        onClick={() => setChangePasswordUser(user)}
-                        className="flex items-center gap-1 rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
-                        title="Cambiar clave"
-                      >
-                        <KeyRound className="h-3.5 w-3.5" />
-                        Cambiar Clave
-                      </button>
-                      <button
-                        onClick={() => handleDelete(user)}
-                        disabled={user.id === currentUserId || user.username.toLowerCase() === "admin"}
-                        className="flex items-center gap-1 rounded px-2 py-1 text-xs text-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
-                        title={
-                          user.username.toLowerCase() === "admin"
-                            ? "El usuario admin no se puede eliminar"
-                            : user.id === currentUserId
-                              ? "No se puede eliminar el usuario actual"
-                              : "Eliminar"
-                        }
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Eliminar
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+      {/* Quick filter + Export */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              value={quickFilter}
+              onChange={(e) => setQuickFilter(e.target.value)}
+              placeholder="Filtro rapido..."
+              className="rounded-lg border py-2 pl-9 pr-3 text-sm"
+            />
+          </div>
+          <div className="rounded-lg border bg-white px-4 py-2">
+            <span className="text-sm text-gray-500">Total:</span>{" "}
+            <span className="font-semibold">{displayedCount}</span>
+            {displayedCount !== users.length && (
+              <span className="ml-1 text-xs text-gray-400">
+                de {users.length}
+              </span>
             )}
-          </tbody>
-        </table>
+          </div>
+        </div>
+        <div className="flex gap-1">
+          <button
+            onClick={exportToExcel}
+            className="flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+            title="Exportar a Excel"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Excel
+          </button>
+          <button
+            onClick={exportToPdf}
+            className="flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+            title="Exportar a PDF"
+          >
+            <Download className="h-3.5 w-3.5" />
+            PDF
+          </button>
+          <button
+            onClick={exportToCsv}
+            className="flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+            title="Exportar a CSV"
+          >
+            <Download className="h-3.5 w-3.5" />
+            CSV
+          </button>
+        </div>
+      </div>
+
+      {/* AG Grid */}
+      <div className="flex-1 overflow-hidden rounded-lg border bg-white">
+        <DataGrid<User>
+          rowData={users}
+          columnDefs={columnDefs}
+          height="calc(100vh - 280px)"
+          quickFilter={quickFilter}
+          loading={loading}
+          noRowsMessage="No hay usuarios registrados."
+          paginationPageSize={50}
+          onDisplayedRowCountChange={setDisplayedCount}
+        />
       </div>
 
       {/* Create user modal */}

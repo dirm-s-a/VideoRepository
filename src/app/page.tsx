@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Film, HardDrive, Monitor, ListMusic, RefreshCw, Play } from "lucide-react";
+import { Film, HardDrive, Monitor, ListMusic, RefreshCw, Play, MapPin } from "lucide-react";
 import { formatBytes, timeAgo, parseUtc } from "@/components/format-utils";
 
 interface LlamadorInfo {
@@ -11,6 +11,7 @@ interface LlamadorInfo {
   last_status: string | null;
   ip_address: string | null;
   playlistNombre: string | null;
+  ubicacion_principal: string;
 }
 
 interface DashboardData {
@@ -185,7 +186,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Llamadores status */}
+      {/* Llamadores status - grouped by ubicacion_principal */}
       <h2 className="text-lg font-semibold mb-4">Estado de Llamadores</h2>
       {data.llamadores.length === 0 ? (
         <div className="bg-white rounded-lg border p-8 text-center text-gray-500">
@@ -196,66 +197,86 @@ export default function DashboardPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-          {data.llamadores.map((l) => {
-            const status = parseStatus(l.last_status);
-            const style = getStatusStyle(l.last_seen_at, status.cacheStatus);
+        <div className="space-y-6">
+          {groupByUbicacion(data.llamadores).map(({ ubicacion, llamadores: group }) => {
+            const groupOnline = group.filter((l) => {
+              if (!l.last_seen_at) return false;
+              return Date.now() - parseUtc(l.last_seen_at).getTime() < 10 * 60 * 1000;
+            });
 
             return (
-              <div
-                key={l.nombre}
-                className={`rounded-lg border p-3 ring-1 ${style.bg} ${style.ring}`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <h3 className="font-bold text-sm truncate">{l.nombre}</h3>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ml-2 ${style.badge}`}
-                  >
-                    {style.label}
+              <div key={ubicacion}>
+                <div className="flex items-center gap-2 mb-2">
+                  <MapPin className="w-4 h-4 text-gray-400" />
+                  <h3 className="font-semibold text-sm text-gray-700">{ubicacion}</h3>
+                  <span className="text-xs text-gray-400">
+                    ({groupOnline.length}/{group.length} online)
                   </span>
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                  {group.map((l) => {
+                    const status = parseStatus(l.last_status);
+                    const style = getStatusStyle(l.last_seen_at, status.cacheStatus);
 
-                <div className="text-xs space-y-0.5">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">
-                      {l.ip_address && (
-                        <span className="font-mono">{l.ip_address}</span>
-                      )}
-                    </span>
-                    <span className="text-gray-500">
-                      {l.playlistNombre && (
-                        <span className="font-medium text-gray-700">{l.playlistNombre}</span>
-                      )}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">
-                      Videos: <span className="font-medium text-gray-700">{l.videoCount}</span>
-                      {status.cachedCount !== undefined && (
-                        <span className="ml-2">
-                          Cache: <span className="font-medium text-gray-700">
-                            {status.cachedCount}/{status.totalCount ?? l.videoCount}
+                    return (
+                      <div
+                        key={l.nombre}
+                        className={`rounded-lg border p-3 ring-1 ${style.bg} ${style.ring}`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <h3 className="font-bold text-sm truncate">{l.nombre}</h3>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ml-2 ${style.badge}`}
+                          >
+                            {style.label}
                           </span>
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-gray-400">{timeAgo(l.last_seen_at)}</span>
-                  </div>
+                        </div>
 
-                  {status.currentVideo && (
-                    <div className="flex items-center gap-1 mt-1 rounded bg-white/60 px-2 py-1 truncate">
-                      <Play className="w-3 h-3 text-gray-400 shrink-0" />
-                      <span className="truncate font-medium text-gray-700">
-                        {status.currentVideo}
-                        {data.videoDescriptions[status.currentVideo] && (
-                          <span className="font-normal text-gray-500">
-                            {" "}({data.videoDescriptions[status.currentVideo]})
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  )}
+                        <div className="text-xs space-y-0.5">
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">
+                              {l.ip_address && (
+                                <span className="font-mono">{l.ip_address}</span>
+                              )}
+                            </span>
+                            <span className="text-gray-500">
+                              {l.playlistNombre && (
+                                <span className="font-medium text-gray-700">{l.playlistNombre}</span>
+                              )}
+                            </span>
+                          </div>
+
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">
+                              Videos: <span className="font-medium text-gray-700">{l.videoCount}</span>
+                              {status.cachedCount !== undefined && (
+                                <span className="ml-2">
+                                  Cache: <span className="font-medium text-gray-700">
+                                    {status.cachedCount}/{status.totalCount ?? l.videoCount}
+                                  </span>
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-gray-400">{timeAgo(l.last_seen_at)}</span>
+                          </div>
+
+                          {status.currentVideo && (
+                            <div className="flex items-center gap-1 mt-1 rounded bg-white/60 px-2 py-1 truncate">
+                              <Play className="w-3 h-3 text-gray-400 shrink-0" />
+                              <span className="truncate font-medium text-gray-700">
+                                {status.currentVideo}
+                                {data.videoDescriptions[status.currentVideo] && (
+                                  <span className="font-normal text-gray-500">
+                                    {" "}({data.videoDescriptions[status.currentVideo]})
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -268,6 +289,29 @@ export default function DashboardPage() {
       </p>
     </div>
   );
+}
+
+function groupByUbicacion(
+  llamadores: LlamadorInfo[]
+): { ubicacion: string; llamadores: LlamadorInfo[] }[] {
+  const groups = new Map<string, LlamadorInfo[]>();
+  for (const l of llamadores) {
+    const key = l.ubicacion_principal || "Sin ubicacion";
+    const arr = groups.get(key);
+    if (arr) {
+      arr.push(l);
+    } else {
+      groups.set(key, [l]);
+    }
+  }
+  // "Sin ubicacion" goes last, the rest alphabetically
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => {
+      if (a === "Sin ubicacion") return 1;
+      if (b === "Sin ubicacion") return -1;
+      return a.localeCompare(b);
+    })
+    .map(([ubicacion, llamadores]) => ({ ubicacion, llamadores }));
 }
 
 function StatCard({

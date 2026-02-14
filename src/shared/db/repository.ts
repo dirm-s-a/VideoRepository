@@ -232,7 +232,16 @@ function initSchema(db: Database.Database) {
     db.exec("ALTER TABLE videos ADD COLUMN tipo TEXT DEFAULT ''");
   }
 
-  // 5. Users table for authentication
+  // 5. Ubicaciones table for location management
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ubicaciones (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre TEXT NOT NULL UNIQUE,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // 6. Users table for authentication
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -739,6 +748,39 @@ export function getVideoPlays(filters?: {
 
   sql += " ORDER BY vp.played_at DESC";
   return getDb().prepare(sql).all(...params) as VideoPlayRow[];
+}
+
+// ── Ubicacion operations ──
+
+export interface UbicacionRow {
+  id: number;
+  nombre: string;
+  created_at: string;
+}
+
+export function getAllUbicaciones(): UbicacionRow[] {
+  return getDb().prepare("SELECT * FROM ubicaciones ORDER BY nombre").all() as UbicacionRow[];
+}
+
+export function getUbicacionById(id: number): UbicacionRow | undefined {
+  return getDb().prepare("SELECT * FROM ubicaciones WHERE id = ?").get(id) as UbicacionRow | undefined;
+}
+
+export function createUbicacion(nombre: string): UbicacionRow {
+  const result = getDb()
+    .prepare("INSERT INTO ubicaciones (nombre) VALUES (?)")
+    .run(nombre.trim());
+  return getUbicacionById(Number(result.lastInsertRowid))!;
+}
+
+export function updateUbicacion(id: number, nombre: string): UbicacionRow | undefined {
+  getDb().prepare("UPDATE ubicaciones SET nombre = ? WHERE id = ?").run(nombre.trim(), id);
+  return getUbicacionById(id);
+}
+
+export function deleteUbicacion(id: number): boolean {
+  const result = getDb().prepare("DELETE FROM ubicaciones WHERE id = ?").run(id);
+  return result.changes > 0;
 }
 
 // ── User operations ──

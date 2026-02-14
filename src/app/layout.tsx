@@ -14,6 +14,7 @@ import {
   Users,
   Database,
   LogOut,
+  MapPin,
 } from "lucide-react";
 import { setupAgGridLicense } from "@/shared/config/ag-grid-license";
 
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/videos", label: "Videos", icon: Film },
   { href: "/playlists", label: "Playlists", icon: ListMusic },
   { href: "/llamadores", label: "Llamadores", icon: Monitor },
+  { href: "/ubicaciones", label: "Ubicaciones", icon: MapPin },
   { href: "/estadisticas", label: "Estadisticas", icon: BarChart3 },
   { href: "/usuarios", label: "Usuarios", icon: Users },
   { href: "/database", label: "Base de Datos", icon: Database },

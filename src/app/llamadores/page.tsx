@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   Monitor,
   Plus,
@@ -13,8 +13,13 @@ import {
   Tv,
   MessageSquare,
   ListMusic,
+  Search,
+  Download,
 } from "lucide-react";
 import { timeAgo, parseUtc } from "@/components/format-utils";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import { DataGrid } from "@/shared/ui/DataGrid";
+import { useDataGridExport } from "@/shared/ui/useDataGridExport";
 
 interface LlamadorInfo {
   nombre: string;
@@ -39,20 +44,38 @@ interface PlaylistOption {
   videoCount: number;
 }
 
+interface UbicacionOption {
+  id: number;
+  nombre: string;
+}
+
 export default function LlamadoresPage() {
   const [llamadores, setLlamadores] = useState<LlamadorInfo[]>([]);
   const [playlists, setPlaylists] = useState<PlaylistOption[]>([]);
+  const [ubicaciones, setUbicaciones] = useState<UbicacionOption[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
-  const [editingLlamador, setEditingLlamador] = useState<LlamadorInfo | null>(null);
+  const [editingLlamador, setEditingLlamador] = useState<LlamadorInfo | null>(
+    null
+  );
+  const [loading, setLoading] = useState(true);
+  const [quickFilter, setQuickFilter] = useState("");
+  const [displayedCount, setDisplayedCount] = useState(0);
 
   const load = useCallback(async () => {
-    const [llamRes, plRes] = await Promise.all([
-      fetch("/api/llamadores"),
-      fetch("/api/playlists"),
-    ]);
-    if (llamRes.ok) setLlamadores(await llamRes.json());
-    if (plRes.ok) setPlaylists(await plRes.json());
+    setLoading(true);
+    try {
+      const [llamRes, plRes, ubRes] = await Promise.all([
+        fetch("/api/llamadores"),
+        fetch("/api/playlists"),
+        fetch("/api/ubicaciones"),
+      ]);
+      if (llamRes.ok) setLlamadores(await llamRes.json());
+      if (plRes.ok) setPlaylists(await plRes.json());
+      if (ubRes.ok) setUbicaciones(await ubRes.json());
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -61,7 +84,6 @@ export default function LlamadoresPage() {
 
   async function handleAddLlamador() {
     if (!newName.trim()) return;
-    // Use the backward-compatible sync endpoint to auto-register
     await fetch(`/api/playlists/${encodeURIComponent(newName.trim())}`);
     setNewName("");
     setShowAdd(false);
@@ -80,8 +102,165 @@ export default function LlamadoresPage() {
     }
   }
 
+  // AG-Grid column definitions
+  const columnDefs = useMemo<ColDef<LlamadorInfo>[]>(
+    () => [
+      {
+        field: "nombre",
+        headerName: "Nombre",
+        flex: 1,
+        minWidth: 150,
+        cellRenderer: (params: ICellRendererParams<LlamadorInfo>) => {
+          if (!params.data) return null;
+          const ll = params.data;
+          const isOnline =
+            ll.last_seen_at &&
+            Date.now() - parseUtc(ll.last_seen_at).getTime() < 10 * 60 * 1000;
+          return (
+            <div className="flex items-center gap-2 h-full">
+              <span
+                className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                  isOnline ? "bg-green-500" : "bg-gray-300"
+                }`}
+              />
+              <span className="font-medium">{ll.nombre}</span>
+            </div>
+          );
+        },
+      },
+      {
+        field: "ubicacion_principal",
+        headerName: "Ubicacion Principal",
+        enableRowGroup: true,
+        width: 200,
+        valueFormatter: (p: { value: string }) => p.value || "—",
+      },
+      {
+        field: "ubicacion_secundaria",
+        headerName: "Ubicacion Secundaria",
+        width: 180,
+        valueFormatter: (p: { value: string }) => p.value || "—",
+      },
+      {
+        field: "playlistNombre",
+        headerName: "Playlist",
+        enableRowGroup: true,
+        width: 180,
+        cellRenderer: (params: ICellRendererParams<LlamadorInfo>) => {
+          if (!params.data) return null;
+          const ll = params.data;
+          if (!ll.playlistNombre) {
+            return (
+              <span className="italic text-gray-400">Sin playlist</span>
+            );
+          }
+          return (
+            <span>
+              {ll.playlistNombre}{" "}
+              <span className="text-gray-400">
+                ({ll.videoCount} video{ll.videoCount !== 1 ? "s" : ""})
+              </span>
+            </span>
+          );
+        },
+      },
+      {
+        field: "layout",
+        headerName: "Layout",
+        enableRowGroup: true,
+        width: 120,
+        valueFormatter: (p: { value: string }) =>
+          p.value === "vertical" ? "Vertical" : "Horizontal",
+      },
+      {
+        field: "marca_modelo_tv",
+        headerName: "TV",
+        width: 180,
+        valueFormatter: (p: { value: string }) => p.value || "—",
+      },
+      {
+        field: "resolucion_pantalla",
+        headerName: "Resolucion",
+        width: 130,
+        valueFormatter: (p: { value: string }) => p.value || "—",
+      },
+      {
+        field: "ip_address",
+        headerName: "IP",
+        width: 140,
+        valueFormatter: (p: { value: string | null }) => p.value || "—",
+      },
+      {
+        field: "last_seen_at",
+        headerName: "Ultimo contacto",
+        width: 150,
+        valueFormatter: (params: { value: string | null }) =>
+          timeAgo(params.value),
+      },
+      {
+        field: "observacion",
+        headerName: "Observacion",
+        width: 200,
+        valueFormatter: (p: { value: string }) => p.value || "—",
+      },
+      {
+        headerName: "Acciones",
+        width: 110,
+        sortable: false,
+        filter: false,
+        pinned: "right",
+        cellRenderer: (params: ICellRendererParams<LlamadorInfo>) => {
+          if (!params.data) return null;
+          const ll = params.data;
+          return (
+            <div className="flex items-center gap-1 h-full">
+              <button
+                onClick={() => setEditingLlamador(ll)}
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-600"
+                title="Configurar"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => handleDelete(ll.nombre)}
+                className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                title="Eliminar"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          );
+        },
+      },
+    ],
+    []
+  );
+
+  // Export setup
+  const exportColumns = useMemo(
+    () => [
+      { header: "Nombre", field: "nombre", width: 20 },
+      { header: "Ubicacion Principal", field: "ubicacion_principal", width: 22 },
+      { header: "Ubicacion Secundaria", field: "ubicacion_secundaria", width: 20 },
+      { header: "Playlist", field: "playlistNombre", width: 18 },
+      { header: "Layout", field: "layout", width: 12 },
+      { header: "TV", field: "marca_modelo_tv", width: 22 },
+      { header: "Resolucion", field: "resolucion_pantalla", width: 14 },
+      { header: "IP", field: "ip_address", width: 16 },
+      { header: "Observacion", field: "observacion", width: 25 },
+    ],
+    []
+  );
+
+  const { exportToExcel, exportToPdf, exportToCsv } = useDataGridExport({
+    data: llamadores,
+    columns: exportColumns,
+    fileName: "llamadores",
+    title: "Listado de Llamadores",
+  });
+
   return (
-    <div className="p-8">
+    <div className="flex h-full flex-col p-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Llamadores</h1>
         <div className="flex gap-2">
@@ -102,7 +281,7 @@ export default function LlamadoresPage() {
       </div>
 
       {showAdd && (
-        <div className="mb-6 flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
           <input
             type="text"
             value={newName}
@@ -127,122 +306,79 @@ export default function LlamadoresPage() {
         </div>
       )}
 
-      {llamadores.length === 0 ? (
-        <div className="rounded-lg border bg-white p-8 text-center text-gray-500">
-          <Monitor className="mx-auto mb-3 h-12 w-12 text-gray-300" />
-          <p>No hay llamadores registrados</p>
-          <p className="text-sm">
-            Agrega un llamador o espera a que se registre automaticamente al
-            sincronizar
-          </p>
+      {/* Quick filter + Export */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              value={quickFilter}
+              onChange={(e) => setQuickFilter(e.target.value)}
+              placeholder="Filtro rapido..."
+              className="rounded-lg border py-2 pl-9 pr-3 text-sm"
+            />
+          </div>
+          <div className="rounded-lg border bg-white px-4 py-2">
+            <span className="text-sm text-gray-500">Total:</span>{" "}
+            <span className="font-semibold">{displayedCount}</span>
+            {displayedCount !== llamadores.length && (
+              <span className="ml-1 text-xs text-gray-400">
+                de {llamadores.length}
+              </span>
+            )}
+          </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {llamadores.map((ll) => {
-            const isOnline =
-              ll.last_seen_at &&
-              Date.now() - parseUtc(ll.last_seen_at).getTime() <
-                10 * 60 * 1000;
-
-            return (
-              <div
-                key={ll.nombre}
-                className="group relative rounded-lg border bg-white p-4 transition-all hover:border-blue-300 hover:shadow-md"
-              >
-                {/* Action buttons */}
-                <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  <button
-                    onClick={() => setEditingLlamador(ll)}
-                    className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                    title="Configurar"
-                  >
-                    <Settings className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(ll.nombre)}
-                    className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                    title="Eliminar"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="mb-3 flex items-center gap-3">
-                  {/* Photo thumbnail - larger */}
-                  {ll.foto ? (
-                    <img
-                      src={ll.foto}
-                      alt={ll.nombre}
-                      className="h-16 w-16 rounded-lg object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-gray-100 text-gray-400">
-                      <Tv className="h-7 w-7" />
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{ll.nombre}</h3>
-                      <span
-                        className={`h-2.5 w-2.5 rounded-full ${
-                          isOnline ? "bg-green-500" : "bg-gray-300"
-                        }`}
-                      />
-                    </div>
-                    {ll.ubicacion_principal && (
-                      <p className="text-xs text-gray-400">
-                        {ll.ubicacion_principal}
-                        {ll.ubicacion_secundaria && ` - ${ll.ubicacion_secundaria}`}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-1 text-sm text-gray-500">
-                  {/* Assigned playlist */}
-                  <p className="flex items-center gap-1">
-                    <ListMusic className="h-3.5 w-3.5" />
-                    {ll.playlistNombre ? (
-                      <span>
-                        <span className="font-medium text-gray-700">{ll.playlistNombre}</span>
-                        {" "}({ll.videoCount} video{ll.videoCount !== 1 ? "s" : ""})
-                      </span>
-                    ) : (
-                      <span className="italic text-gray-400">Sin playlist</span>
-                    )}
-                  </p>
-                  {ll.layout && (
-                    <p className="text-xs">
-                      Layout: {ll.layout === "vertical" ? "Vertical" : "Horizontal"}
-                    </p>
-                  )}
-                  {ll.marca_modelo_tv && (
-                    <p className="text-xs">TV: {ll.marca_modelo_tv}</p>
-                  )}
-                  {ll.resolucion_pantalla && (
-                    <p className="text-xs">Res: {ll.resolucion_pantalla}</p>
-                  )}
-                  {ll.ip_address && (
-                    <p className="text-xs">IP: {ll.ip_address}</p>
-                  )}
-                  <p className="text-xs">Visto: {timeAgo(ll.last_seen_at)}</p>
-                  {ll.observacion && (
-                    <p className="mt-1 text-xs italic text-gray-400">
-                      {ll.observacion}
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        <div className="flex gap-1">
+          <button
+            onClick={exportToExcel}
+            className="flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+            title="Exportar a Excel"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Excel
+          </button>
+          <button
+            onClick={exportToPdf}
+            className="flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+            title="Exportar a PDF"
+          >
+            <Download className="h-3.5 w-3.5" />
+            PDF
+          </button>
+          <button
+            onClick={exportToCsv}
+            className="flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+            title="Exportar a CSV"
+          >
+            <Download className="h-3.5 w-3.5" />
+            CSV
+          </button>
         </div>
-      )}
+      </div>
+
+      {/* AG Grid */}
+      <div className="flex-1 overflow-hidden rounded-lg border bg-white">
+        <DataGrid<LlamadorInfo>
+          rowData={llamadores}
+          columnDefs={columnDefs}
+          height="calc(100vh - 280px)"
+          quickFilter={quickFilter}
+          loading={loading}
+          noRowsMessage="No hay llamadores registrados. Agrega un llamador o espera a que se registre automaticamente."
+          rowGroupPanelShow="always"
+          groupDefaultExpanded={1}
+          paginationPageSize={50}
+          onDisplayedRowCountChange={setDisplayedCount}
+        />
+      </div>
 
       {/* Edit llamador modal */}
       {editingLlamador && (
         <LlamadorEditModal
           llamador={editingLlamador}
           playlists={playlists}
+          ubicaciones={ubicaciones}
           onClose={() => setEditingLlamador(null)}
           onSaved={() => {
             setEditingLlamador(null);
@@ -259,18 +395,26 @@ export default function LlamadoresPage() {
 function LlamadorEditModal({
   llamador,
   playlists,
+  ubicaciones,
   onClose,
   onSaved,
 }: {
   llamador: LlamadorInfo;
   playlists: PlaylistOption[];
+  ubicaciones: UbicacionOption[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [observacion, setObservacion] = useState(llamador.observacion || "");
-  const [ubicacionPrincipal, setUbicacionPrincipal] = useState(llamador.ubicacion_principal || "");
-  const [ubicacionSecundaria, setUbicacionSecundaria] = useState(llamador.ubicacion_secundaria || "");
-  const [resolucionPantalla, setResolucionPantalla] = useState(llamador.resolucion_pantalla || "");
+  const [ubicacionPrincipal, setUbicacionPrincipal] = useState(
+    llamador.ubicacion_principal || ""
+  );
+  const [ubicacionSecundaria, setUbicacionSecundaria] = useState(
+    llamador.ubicacion_secundaria || ""
+  );
+  const [resolucionPantalla, setResolucionPantalla] = useState(
+    llamador.resolucion_pantalla || ""
+  );
   const [layout, setLayout] = useState(llamador.layout || "horizontal");
   const [marcaModeloTv, setMarcaModeloTv] = useState(
     llamador.marca_modelo_tv || ""
@@ -433,19 +577,31 @@ function LlamadorEditModal({
               </div>
             </div>
 
-            {/* Ubicacion Principal */}
+            {/* Ubicacion Principal - SELECT dropdown */}
             <div>
               <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
                 <MapPin className="h-4 w-4" />
                 Ubicacion Principal
               </label>
-              <input
-                type="text"
+              <select
                 value={ubicacionPrincipal}
                 onChange={(e) => setUbicacionPrincipal(e.target.value)}
-                placeholder="Ej: Centro Belgrano 136"
                 className="w-full rounded-lg border px-3 py-2 text-sm"
-              />
+              >
+                <option value="">Sin ubicacion</option>
+                {ubicaciones.map((u) => (
+                  <option key={u.id} value={u.nombre}>
+                    {u.nombre}
+                  </option>
+                ))}
+                {/* Show current value if not in list (legacy data) */}
+                {ubicacionPrincipal &&
+                  !ubicaciones.some((u) => u.nombre === ubicacionPrincipal) && (
+                    <option value={ubicacionPrincipal}>
+                      {ubicacionPrincipal} (no registrada)
+                    </option>
+                  )}
+              </select>
             </div>
 
             {/* Ubicacion Secundaria */}
