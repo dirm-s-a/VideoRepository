@@ -16,7 +16,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Public pages (no auth required)
-  if (pathname === "/login" || pathname === "/manual") {
+  if (pathname === "/login" || pathname === "/manual" || pathname === "/manualLlamador") {
     return NextResponse.next();
   }
 

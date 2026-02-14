@@ -45,7 +45,7 @@ export default function RootLayout({
 
   // Fetch current user (skip on public pages)
   useEffect(() => {
-    if (pathname === "/login" || pathname === "/manual") {
+    if (pathname === "/login" || pathname === "/manual" || pathname === "/manualLlamador") {
       setCurrentUser(null);
       return;
     }
@@ -63,7 +63,7 @@ export default function RootLayout({
   }
 
   // Public pages: no sidebar
-  if (pathname === "/login" || pathname === "/manual") {
+  if (pathname === "/login" || pathname === "/manual" || pathname === "/manualLlamador") {
     return (
       <html lang="es">
         <body className="bg-gray-50 text-gray-900 min-h-screen">
@@ -122,16 +122,28 @@ export default function RootLayout({
             )}
             <div className="flex items-center justify-between">
               <p className="text-xs text-gray-500">Video Repository v1.0</p>
-              <a
-                href="/manual"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300"
-                title="Manual de Usuario"
-              >
-                <BookOpen className="h-3.5 w-3.5" />
-                Manual
-              </a>
+              <div className="flex items-center gap-3">
+                <a
+                  href="/manual"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300"
+                  title="Manual del Video Repository"
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Manual
+                </a>
+                <a
+                  href="/manualLlamador"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300"
+                  title="Manual del Llamador de Turnos"
+                >
+                  <Monitor className="h-3.5 w-3.5" />
+                  Llamador
+                </a>
+              </div>
             </div>
           </div>
         </aside>
