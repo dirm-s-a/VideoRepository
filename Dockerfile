@@ -16,6 +16,10 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .
+
+# JWT secret must be available at build time for Edge middleware
+ARG JWT_SECRET=video-repo-default-secret-change-me
+ENV JWT_SECRET=${JWT_SECRET}
 RUN npm run build
 
 # --- Production ---
@@ -28,6 +32,8 @@ RUN apk add --no-cache libstdc++
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+ARG JWT_SECRET=video-repo-default-secret-change-me
+ENV JWT_SECRET=${JWT_SECRET}
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs

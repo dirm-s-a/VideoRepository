@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   Upload,
   Trash2,
@@ -10,8 +10,14 @@ import {
   Check,
   X,
   Eye,
+  Download,
 } from "lucide-react";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { formatBytes, formatDate } from "@/components/format-utils";
+import { DataGrid } from "@/shared/ui/DataGrid";
+import { useDataGridExport } from "@/shared/ui/useDataGridExport";
+
+const VIDEO_TIPOS = ["Institucionales", "Marketing", "Publicidad", "Otros"] as const;
 
 interface Video {
   id: number;
@@ -21,6 +27,7 @@ interface Video {
   size_bytes: number;
   uploaded_at: string;
   description: string;
+  tipo: string;
 }
 
 interface UploadItem {
@@ -34,9 +41,11 @@ export default function VideosPage() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [description, setDescription] = useState("");
+  const [uploadTipo, setUploadTipo] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingDesc, setEditingDesc] = useState("");
   const [previewVideo, setPreviewVideo] = useState<Video | null>(null);
+  const [quickFilter, setQuickFilter] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadVideos = useCallback(async () => {
@@ -53,6 +62,7 @@ export default function VideosPage() {
   function uploadFile(
     file: File,
     desc: string,
+    tipo: string,
     index: number
   ): Promise<Video | null> {
     return new Promise((resolve) => {
@@ -60,6 +70,7 @@ export default function VideosPage() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("description", desc);
+      formData.append("tipo", tipo);
 
       xhr.upload.addEventListener("progress", (e) => {
         if (e.lengthComputable) {
@@ -122,7 +133,6 @@ export default function VideosPage() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    // Build upload items
     const items: UploadItem[] = Array.from(files).map((file) => ({
       file,
       progress: 0,
@@ -130,22 +140,19 @@ export default function VideosPage() {
     }));
     setUploads(items);
 
-    // Upload one by one, updating list as each completes
     for (let i = 0; i < items.length; i++) {
-      const uploaded = await uploadFile(items[i].file, description, i);
+      const uploaded = await uploadFile(items[i].file, description, uploadTipo, i);
       if (uploaded) {
-        // Add to list immediately
         setVideos((prev) => [uploaded, ...prev]);
       }
     }
 
-    // Clear after a short delay so user sees final state
     setTimeout(() => {
       setUploads([]);
       setDescription("");
+      setUploadTipo("");
     }, 2000);
 
-    // Reset file input
     e.target.value = "";
   }
 
@@ -206,6 +213,176 @@ export default function VideosPage() {
         )
       : 0;
 
+  // ── AG Grid column definitions ──
+
+  const columnDefs = useMemo<ColDef<Video>[]>(
+    () => [
+      {
+        headerName: "Nombre",
+        field: "original_name",
+        flex: 2,
+        minWidth: 200,
+      },
+      {
+        headerName: "Tamano",
+        field: "size_bytes",
+        width: 120,
+        type: "numericColumn",
+        valueFormatter: (p) =>
+          p.value != null ? formatBytes(p.value) : "",
+      },
+      {
+        headerName: "Subido",
+        field: "uploaded_at",
+        width: 160,
+        valueFormatter: (p) =>
+          p.value ? formatDate(p.value) : "",
+      },
+      {
+        headerName: "Tipo",
+        field: "tipo",
+        width: 150,
+        enableRowGroup: true,
+        cellRenderer: (params: ICellRendererParams<Video>) => {
+          const video = params.data;
+          if (!video) return null;
+          return (
+            <select
+              value={video.tipo || ""}
+              onChange={async (e) => {
+                const newTipo = e.target.value;
+                const res = await fetch(`/api/videos/${video.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ tipo: newTipo }),
+                });
+                if (res.ok) {
+                  const updated: Video = await res.json();
+                  setVideos((prev) =>
+                    prev.map((v) => (v.id === video.id ? updated : v))
+                  );
+                }
+              }}
+              className="w-full rounded border-0 bg-transparent px-1 py-0.5 text-sm focus:ring-1 focus:ring-blue-400"
+            >
+              <option value="">—</option>
+              {VIDEO_TIPOS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          );
+        },
+      },
+      {
+        headerName: "Descripcion",
+        field: "description",
+        flex: 1,
+        minWidth: 150,
+        cellRenderer: (params: ICellRendererParams<Video>) => {
+          const video = params.data;
+          if (!video) return null;
+
+          if (editingId === video.id) {
+            return (
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={editingDesc}
+                  onChange={(e) => setEditingDesc(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveEdit(video.id);
+                    if (e.key === "Escape") cancelEdit();
+                  }}
+                  className="w-full rounded border px-2 py-1 text-sm"
+                  autoFocus
+                />
+                <button
+                  onClick={() => saveEdit(video.id)}
+                  className="rounded p-1 text-green-600 hover:bg-green-50"
+                  title="Guardar"
+                >
+                  <Check className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={cancelEdit}
+                  className="rounded p-1 text-gray-400 hover:bg-gray-100"
+                  title="Cancelar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            );
+          }
+
+          return (
+            <div className="flex items-center gap-1">
+              <span className="text-gray-500">
+                {video.description || "\u2014"}
+              </span>
+              <button
+                onClick={() => startEdit(video)}
+                className="rounded p-1 text-gray-300 hover:bg-gray-100 hover:text-gray-600"
+                title="Editar descripcion"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        },
+      },
+      {
+        headerName: "Acciones",
+        width: 100,
+        sortable: false,
+        filter: false,
+        cellRenderer: (params: ICellRendererParams<Video>) => {
+          const video = params.data;
+          if (!video) return null;
+          return (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPreviewVideo(video)}
+                className="rounded p-1 text-blue-500 hover:bg-blue-50 hover:text-blue-700"
+                title="Preview"
+              >
+                <Eye className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => handleDelete(video)}
+                className="rounded p-1 text-red-500 hover:bg-red-50 hover:text-red-700"
+                title="Eliminar"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          );
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editingId, editingDesc]
+  );
+
+  // ── Export setup ──
+
+  const exportColumns = useMemo(
+    () => [
+      { header: "Nombre", field: "original_name", width: 40 },
+      { header: "Tipo", field: "tipo", width: 15 },
+      { header: "Tamano (bytes)", field: "size_bytes", width: 15 },
+      { header: "Subido", field: "uploaded_at", width: 20 },
+      { header: "Descripcion", field: "description", width: 35 },
+    ],
+    []
+  );
+
+  const { exportToExcel, exportToPdf, exportToCsv } = useDataGridExport({
+    data: videos,
+    columns: exportColumns,
+    fileName: "videos",
+    title: "Videos del Repositorio",
+  });
+
   return (
     <div className="p-8">
       <div className="mb-6 flex items-center justify-between">
@@ -227,18 +404,36 @@ export default function VideosPage() {
         </h2>
 
         <div className="space-y-3">
-          <div>
-            <label className="mb-1 block text-sm text-gray-600">
-              Descripción (opcional, se aplica a todos los archivos)
-            </label>
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Ej: Promo cardiología 2026"
-              className="w-full max-w-md rounded-lg border px-3 py-2 text-sm"
-              disabled={isUploading}
-            />
+          <div className="flex gap-4">
+            <div className="flex-1 max-w-md">
+              <label className="mb-1 block text-sm text-gray-600">
+                Descripcion (opcional, se aplica a todos los archivos)
+              </label>
+              <input
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Ej: Promo cardiologia 2026"
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                disabled={isUploading}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-gray-600">
+                Tipo
+              </label>
+              <select
+                value={uploadTipo}
+                onChange={(e) => setUploadTipo(e.target.value)}
+                className="rounded-lg border px-3 py-2 text-sm"
+                disabled={isUploading}
+              >
+                <option value="">Sin tipo</option>
+                {VIDEO_TIPOS.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
@@ -264,7 +459,7 @@ export default function VideosPage() {
           </div>
 
           <p className="text-xs text-gray-400">
-            Formatos: MP4, WebM, OGG, AVI, MKV, MOV. Máximo recomendado: 500MB
+            Formatos: MP4, WebM, OGG, AVI, MKV, MOV. Maximo recomendado: 500MB
             por archivo.
           </p>
         </div>
@@ -334,128 +529,69 @@ export default function VideosPage() {
         )}
       </div>
 
-      {/* Video list */}
-      <div className="rounded-lg border bg-white">
-        {videos.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            <Film className="mx-auto mb-3 h-12 w-12 text-gray-300" />
-            <p>No hay videos en el repositorio</p>
-            <p className="text-sm">
-              Subí tu primer video usando el botón de arriba
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="border-b bg-gray-50 px-4 py-2 text-sm text-gray-500">
-              {videos.length} video{videos.length !== 1 ? "s" : ""} en el
-              repositorio
-            </div>
-            <table className="w-full">
-              <thead className="border-b bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
-                    Nombre
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
-                    Tamaño
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
-                    Subido
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
-                    Descripción
-                  </th>
-                  <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {videos.map((video) => (
-                  <tr key={video.id} className="group hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <div className="text-sm font-medium">
-                        {video.original_name}
-                      </div>
-                      <div className="font-mono text-xs text-gray-400">
-                        {video.filename}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {formatBytes(video.size_bytes)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {formatDate(video.uploaded_at)}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {editingId === video.id ? (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="text"
-                            value={editingDesc}
-                            onChange={(e) => setEditingDesc(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") saveEdit(video.id);
-                              if (e.key === "Escape") cancelEdit();
-                            }}
-                            className="w-full rounded border px-2 py-1 text-sm"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => saveEdit(video.id)}
-                            className="rounded p-1 text-green-600 hover:bg-green-50"
-                            title="Guardar"
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="rounded p-1 text-gray-400 hover:bg-gray-100"
-                            title="Cancelar"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-500">
-                            {video.description || "—"}
-                          </span>
-                          <button
-                            onClick={() => startEdit(video)}
-                            className="rounded p-1 text-gray-300 opacity-0 transition-opacity hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100"
-                            title="Editar descripción"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => setPreviewVideo(video)}
-                          className="rounded p-1 text-blue-500 hover:bg-blue-50 hover:text-blue-700"
-                          title="Preview"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(video)}
-                          className="rounded p-1 text-red-500 hover:bg-red-50 hover:text-red-700"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        )}
-      </div>
+      {/* Video list - AG Grid */}
+      {videos.length === 0 ? (
+        <div className="rounded-lg border bg-white p-8 text-center text-gray-500">
+          <Film className="mx-auto mb-3 h-12 w-12 text-gray-300" />
+          <p>No hay videos en el repositorio</p>
+          <p className="text-sm">
+            Subi tu primer video usando el boton de arriba
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-lg border bg-white">
+          <DataGrid
+            rowData={videos}
+            columnDefs={columnDefs}
+            height="calc(100vh - 480px)"
+            quickFilter={quickFilter}
+            paginationPageSize={50}
+            toolbarSlot={
+              <div className="flex items-center justify-between border-b bg-gray-50 px-4 py-2">
+                <span className="text-sm text-gray-500">
+                  {videos.length} video{videos.length !== 1 ? "s" : ""} en el
+                  repositorio
+                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={quickFilter}
+                    onChange={(e) => setQuickFilter(e.target.value)}
+                    placeholder="Buscar..."
+                    className="rounded-lg border px-3 py-1.5 text-sm"
+                  />
+                  <div className="flex gap-1 border-l pl-2 ml-1">
+                    <button
+                      onClick={exportToExcel}
+                      className="flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+                      title="Exportar a Excel"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Excel
+                    </button>
+                    <button
+                      onClick={exportToPdf}
+                      className="flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+                      title="Exportar a PDF"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      PDF
+                    </button>
+                    <button
+                      onClick={exportToCsv}
+                      className="flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+                      title="Exportar a CSV"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      CSV
+                    </button>
+                  </div>
+                </div>
+              </div>
+            }
+          />
+        </div>
+      )}
 
       {/* Video preview modal */}
       {previewVideo && (

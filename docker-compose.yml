@@ -18,6 +18,8 @@ services:
     volumes:
       # Persistir videos y base de datos SQLite
       - video-data:/app/data
+    # environment:
+    #   - JWT_SECRET=custom-secret-here  # Must match build-time ARG
     restart: unless-stopped
 
 volumes:

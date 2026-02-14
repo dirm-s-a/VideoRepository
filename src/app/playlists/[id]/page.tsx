@@ -17,27 +17,26 @@ interface Video {
   id: number;
   filename: string;
   original_name: string;
+  description: string;
   size_bytes: number;
 }
 
 interface PlaylistVideo {
   videoId: number;
   filename: string;
+  originalName: string;
+  description: string;
   sha256: string;
   sizeBytes: number;
   order: number;
 }
 
-interface PlaylistData {
-  nombreLlamador: string;
-  videos: PlaylistVideo[];
-}
-
 export default function PlaylistEditorPage() {
   const params = useParams();
   const router = useRouter();
-  const llamadorName = decodeURIComponent(params.llamador as string);
+  const playlistId = params.id as string;
 
+  const [playlistName, setPlaylistName] = useState("");
   const [allVideos, setAllVideos] = useState<Video[]>([]);
   const [playlist, setPlaylist] = useState<PlaylistVideo[]>([]);
   const [saving, setSaving] = useState(false);
@@ -46,24 +45,23 @@ export default function PlaylistEditorPage() {
   const load = useCallback(async () => {
     const [videosRes, playlistRes] = await Promise.all([
       fetch("/api/videos"),
-      fetch(`/api/playlists/${encodeURIComponent(llamadorName)}`),
+      fetch(`/api/playlists/${playlistId}`),
     ]);
 
     if (videosRes.ok) setAllVideos(await videosRes.json());
     if (playlistRes.ok) {
-      const data: PlaylistData = await playlistRes.json();
+      const data = await playlistRes.json();
+      setPlaylistName(data.nombre);
       setPlaylist(data.videos);
     }
-  }, [llamadorName]);
+  }, [playlistId]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // Videos not already in playlist
-  const availableVideos = allVideos.filter(
-    (v) => !playlist.some((pv) => pv.videoId === v.id)
-  );
+  // All videos available to add (duplicates allowed)
+  const availableVideos = allVideos;
 
   function addVideo(video: Video) {
     const maxOrder = playlist.length > 0
@@ -74,6 +72,8 @@ export default function PlaylistEditorPage() {
       {
         videoId: video.id,
         filename: video.filename,
+        originalName: video.original_name,
+        description: video.description || "",
         sha256: "",
         sizeBytes: video.size_bytes,
         order: maxOrder + 1,
@@ -82,8 +82,8 @@ export default function PlaylistEditorPage() {
     setDirty(true);
   }
 
-  function removeVideo(videoId: number) {
-    setPlaylist(playlist.filter((v) => v.videoId !== videoId));
+  function removeVideo(index: number) {
+    setPlaylist(playlist.filter((_, i) => i !== index));
     setDirty(true);
   }
 
@@ -103,23 +103,20 @@ export default function PlaylistEditorPage() {
   async function handleSave() {
     setSaving(true);
     try {
-      const res = await fetch(
-        `/api/playlists/${encodeURIComponent(llamadorName)}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            videos: playlist.map((v, i) => ({
-              videoId: v.videoId,
-              orden: i + 1,
-            })),
-          }),
-        }
-      );
+      const res = await fetch(`/api/playlists/${playlistId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videos: playlist.map((v, i) => ({
+            videoId: v.videoId,
+            orden: i + 1,
+          })),
+        }),
+      });
 
       if (res.ok) {
         setDirty(false);
-        const data: PlaylistData = await res.json();
+        const data = await res.json();
         setPlaylist(data.videos);
       } else {
         const err = await res.json();
@@ -143,7 +140,7 @@ export default function PlaylistEditorPage() {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">{llamadorName}</h1>
+          <h1 className="text-2xl font-bold">{playlistName || "Playlist"}</h1>
           <p className="text-sm text-gray-500">Editor de Playlist</p>
         </div>
         <button
@@ -176,7 +173,7 @@ export default function PlaylistEditorPage() {
             <div className="space-y-2">
               {playlist.map((video, index) => (
                 <div
-                  key={video.videoId}
+                  key={`${video.videoId}-${index}`}
                   className="bg-white border rounded-lg p-3 flex items-center gap-3 hover:shadow-sm"
                 >
                   <span className="text-sm font-mono text-gray-400 w-6 text-center">
@@ -184,10 +181,15 @@ export default function PlaylistEditorPage() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">
-                      {video.filename}
+                      {video.originalName || video.filename}
+                      {video.description && (
+                        <span className="ml-1 text-gray-400 font-normal">
+                          ({video.description})
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {formatBytes(video.sizeBytes)}
+                      {video.filename} &middot; {formatBytes(video.sizeBytes)}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -206,7 +208,7 @@ export default function PlaylistEditorPage() {
                       <ArrowDown className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => removeVideo(video.videoId)}
+                      onClick={() => removeVideo(index)}
                       className="p-1 hover:bg-red-50 text-red-500 rounded"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -226,9 +228,7 @@ export default function PlaylistEditorPage() {
 
           {availableVideos.length === 0 ? (
             <div className="bg-gray-50 border-2 border-dashed rounded-lg p-8 text-center text-gray-400">
-              {allVideos.length === 0
-                ? "No hay videos en el repositorio. Sube videos desde la seccion Videos."
-                : "Todos los videos estan en la playlist."}
+              No hay videos en el repositorio. Sube videos desde la seccion Videos.
             </div>
           ) : (
             <div className="space-y-2">
@@ -240,6 +240,11 @@ export default function PlaylistEditorPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">
                       {video.original_name}
+                      {video.description && (
+                        <span className="ml-1 text-gray-400 font-normal">
+                          ({video.description})
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-gray-400">
                       {video.filename} &middot; {formatBytes(video.size_bytes)}

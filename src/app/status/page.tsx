@@ -11,6 +11,7 @@ interface LlamadorInfo {
   last_seen_at: string | null;
   last_status: string | null;
   ip_address: string | null;
+  playlistNombre: string | null;
 }
 
 interface ParsedStatus {
@@ -24,13 +25,13 @@ export default function StatusPage() {
   const [llamadores, setLlamadores] = useState<LlamadorInfo[]>([]);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/playlists");
+    const res = await fetch("/api/llamadores");
     if (res.ok) setLlamadores(await res.json());
   }, []);
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 30000); // Refresh every 30s
+    const interval = setInterval(load, 30000);
     return () => clearInterval(interval);
   }, [load]);
 
@@ -144,6 +145,13 @@ export default function StatusPage() {
                 </div>
 
                 <div className="text-sm space-y-2">
+                  {l.playlistNombre && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Playlist:</span>
+                      <span className="font-medium">{l.playlistNombre}</span>
+                    </div>
+                  )}
+
                   {l.ip_address && (
                     <div className="flex justify-between">
                       <span className="text-gray-500">IP:</span>

@@ -2,20 +2,29 @@
 
 import "./globals.css";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Film,
   ListMusic,
-  Activity,
+  Monitor,
+  BarChart3,
   Server,
+  Users,
+  Database,
+  LogOut,
 } from "lucide-react";
+import { setupAgGridLicense } from "@/shared/config/ag-grid-license";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/videos", label: "Videos", icon: Film },
   { href: "/playlists", label: "Playlists", icon: ListMusic },
-  { href: "/status", label: "Estado", icon: Activity },
+  { href: "/llamadores", label: "Llamadores", icon: Monitor },
+  { href: "/estadisticas", label: "Estadisticas", icon: BarChart3 },
+  { href: "/usuarios", label: "Usuarios", icon: Users },
+  { href: "/database", label: "Base de Datos", icon: Database },
 ];
 
 export default function RootLayout({
@@ -24,6 +33,42 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
+
+  useEffect(() => {
+    setupAgGridLicense();
+  }, []);
+
+  // Fetch current user (skip on login page)
+  useEffect(() => {
+    if (pathname === "/login") {
+      setCurrentUser(null);
+      return;
+    }
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.username) setCurrentUser(data.username);
+      })
+      .catch(() => {});
+  }, [pathname]);
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  }
+
+  // Login page: no sidebar
+  if (pathname === "/login") {
+    return (
+      <html lang="es">
+        <body className="bg-gray-50 text-gray-900 min-h-screen">
+          {children}
+        </body>
+      </html>
+    );
+  }
 
   return (
     <html lang="es">
@@ -56,8 +101,23 @@ export default function RootLayout({
               );
             })}
           </nav>
-          <div className="p-4 border-t border-gray-700 text-xs text-gray-500">
-            Video Repository v1.0
+          <div className="p-4 border-t border-gray-700">
+            {currentUser && (
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm text-gray-400 truncate">
+                  {currentUser}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-800 hover:text-white"
+                  title="Cerrar sesion"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  Salir
+                </button>
+              </div>
+            )}
+            <p className="text-xs text-gray-500">Video Repository v1.0</p>
           </div>
         </aside>
 

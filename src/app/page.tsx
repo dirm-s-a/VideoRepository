@@ -1,48 +1,135 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Film, HardDrive, Monitor, ListMusic } from "lucide-react";
-import { formatBytes, timeAgo } from "@/components/format-utils";
+import { useEffect, useState, useCallback } from "react";
+import { Film, HardDrive, Monitor, ListMusic, RefreshCw, Play } from "lucide-react";
+import { formatBytes, timeAgo, parseUtc } from "@/components/format-utils";
+
+interface LlamadorInfo {
+  nombre: string;
+  videoCount: number;
+  last_seen_at: string | null;
+  last_status: string | null;
+  ip_address: string | null;
+  playlistNombre: string | null;
+}
 
 interface DashboardData {
   videoCount: number;
   diskUsage: number;
-  llamadores: {
-    nombre: string;
-    videoCount: number;
-    last_seen_at: string | null;
-    last_status: string | null;
-    ip_address: string | null;
-  }[];
+  playlistCount: number;
+  llamadores: LlamadorInfo[];
+  videoDescriptions: Record<string, string>;
+}
+
+interface ParsedStatus {
+  currentVideo?: string;
+  cacheStatus?: string;
+  cachedCount?: number;
+  totalCount?: number;
+}
+
+function parseStatus(raw: string | null): ParsedStatus {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function getStatusStyle(
+  lastSeen: string | null,
+  cacheStatus?: string
+): { bg: string; ring: string; label: string; badge: string } {
+  if (!lastSeen) {
+    return {
+      bg: "bg-gray-50",
+      ring: "ring-gray-300",
+      label: "Sin conexion",
+      badge: "bg-gray-200 text-gray-700",
+    };
+  }
+
+  const diffMin = (Date.now() - parseUtc(lastSeen).getTime()) / 60000;
+
+  if (diffMin > 10) {
+    return {
+      bg: "bg-red-50",
+      ring: "ring-red-300",
+      label: "Offline",
+      badge: "bg-red-200 text-red-800",
+    };
+  }
+
+  if (cacheStatus === "error") {
+    return {
+      bg: "bg-yellow-50",
+      ring: "ring-yellow-300",
+      label: "Error sync",
+      badge: "bg-yellow-200 text-yellow-800",
+    };
+  }
+
+  if (cacheStatus === "syncing") {
+    return {
+      bg: "bg-blue-50",
+      ring: "ring-blue-300",
+      label: "Sincronizando",
+      badge: "bg-blue-200 text-blue-800",
+    };
+  }
+
+  return {
+    bg: "bg-green-50",
+    ring: "ring-green-300",
+    label: "Online",
+    badge: "bg-green-200 text-green-800",
+  };
 }
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      const [videosRes, playlistsRes] = await Promise.all([
-        fetch("/api/videos"),
-        fetch("/api/playlists"),
-      ]);
-      const videos = await videosRes.json();
-      const playlists = await playlistsRes.json();
+  const load = useCallback(async () => {
+    const [videosRes, playlistsRes, llamadoresRes] = await Promise.all([
+      fetch("/api/videos"),
+      fetch("/api/playlists"),
+      fetch("/api/llamadores"),
+    ]);
+    const videos = await videosRes.json();
+    const playlists = await playlistsRes.json();
+    const llamadores = await llamadoresRes.json();
 
-      const diskUsage = Array.isArray(videos)
-        ? videos.reduce(
-            (sum: number, v: { size_bytes: number }) => sum + v.size_bytes,
-            0
-          )
-        : 0;
+    const diskUsage = Array.isArray(videos)
+      ? videos.reduce(
+          (sum: number, v: { size_bytes: number }) => sum + v.size_bytes,
+          0
+        )
+      : 0;
 
-      setData({
-        videoCount: Array.isArray(videos) ? videos.length : 0,
-        diskUsage,
-        llamadores: Array.isArray(playlists) ? playlists : [],
-      });
+    const videoDescriptions: Record<string, string> = {};
+    if (Array.isArray(videos)) {
+      for (const v of videos) {
+        if (v.filename && v.description) {
+          videoDescriptions[v.filename] = v.description;
+        }
+      }
     }
-    load();
+
+    setData({
+      videoCount: Array.isArray(videos) ? videos.length : 0,
+      diskUsage,
+      playlistCount: Array.isArray(playlists) ? playlists.length : 0,
+      llamadores: Array.isArray(llamadores) ? llamadores : [],
+      videoDescriptions,
+    });
   }, []);
+
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 30000);
+    return () => clearInterval(interval);
+  }, [load]);
 
   if (!data) {
     return (
@@ -54,13 +141,21 @@ export default function DashboardPage() {
 
   const onlineLlamadores = data.llamadores.filter((l) => {
     if (!l.last_seen_at) return false;
-    const diff = Date.now() - new Date(l.last_seen_at).getTime();
-    return diff < 10 * 60 * 1000; // 10 minutes
+    const diff = Date.now() - parseUtc(l.last_seen_at).getTime();
+    return diff < 10 * 60 * 1000;
   });
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <button
+          onClick={load}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border rounded-lg hover:bg-gray-50"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
+      </div>
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -77,15 +172,15 @@ export default function DashboardPage() {
           color="purple"
         />
         <StatCard
-          icon={Monitor}
-          label="Llamadores"
-          value={String(data.llamadores.length)}
+          icon={ListMusic}
+          label="Playlists"
+          value={String(data.playlistCount)}
           color="green"
         />
         <StatCard
-          icon={ListMusic}
-          label="Online"
-          value={String(onlineLlamadores.length)}
+          icon={Monitor}
+          label="Llamadores Online"
+          value={`${onlineLlamadores.length}/${data.llamadores.length}`}
           color="emerald"
         />
       </div>
@@ -94,49 +189,83 @@ export default function DashboardPage() {
       <h2 className="text-lg font-semibold mb-4">Estado de Llamadores</h2>
       {data.llamadores.length === 0 ? (
         <div className="bg-white rounded-lg border p-8 text-center text-gray-500">
-          No hay llamadores registrados. Los llamadores se registran
-          automaticamente al sincronizar.
+          <Monitor className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+          <p>No hay llamadores registrados</p>
+          <p className="text-sm">
+            Los llamadores se registran automaticamente al sincronizar.
+          </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
           {data.llamadores.map((l) => {
-            const isOnline =
-              l.last_seen_at &&
-              Date.now() - new Date(l.last_seen_at).getTime() < 10 * 60 * 1000;
-            let status: { currentVideo?: string; cacheStatus?: string } = {};
-            try {
-              if (l.last_status) status = JSON.parse(l.last_status);
-            } catch {
-              /* ignore */
-            }
+            const status = parseStatus(l.last_status);
+            const style = getStatusStyle(l.last_seen_at, status.cacheStatus);
 
             return (
               <div
                 key={l.nombre}
-                className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow"
+                className={`rounded-lg border p-3 ring-1 ${style.bg} ${style.ring}`}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold">{l.nombre}</h3>
+                <div className="flex items-center justify-between mb-1.5">
+                  <h3 className="font-bold text-sm truncate">{l.nombre}</h3>
                   <span
-                    className={`w-3 h-3 rounded-full ${
-                      isOnline ? "bg-green-500" : "bg-gray-300"
-                    }`}
-                  />
+                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ml-2 ${style.badge}`}
+                  >
+                    {style.label}
+                  </span>
                 </div>
-                <div className="text-sm text-gray-500 space-y-1">
-                  <p>Videos: {l.videoCount}</p>
-                  {l.ip_address && <p>IP: {l.ip_address}</p>}
+
+                <div className="text-xs space-y-0.5">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">
+                      {l.ip_address && (
+                        <span className="font-mono">{l.ip_address}</span>
+                      )}
+                    </span>
+                    <span className="text-gray-500">
+                      {l.playlistNombre && (
+                        <span className="font-medium text-gray-700">{l.playlistNombre}</span>
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">
+                      Videos: <span className="font-medium text-gray-700">{l.videoCount}</span>
+                      {status.cachedCount !== undefined && (
+                        <span className="ml-2">
+                          Cache: <span className="font-medium text-gray-700">
+                            {status.cachedCount}/{status.totalCount ?? l.videoCount}
+                          </span>
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-gray-400">{timeAgo(l.last_seen_at)}</span>
+                  </div>
+
                   {status.currentVideo && (
-                    <p>Reproduciendo: {status.currentVideo}</p>
+                    <div className="flex items-center gap-1 mt-1 rounded bg-white/60 px-2 py-1 truncate">
+                      <Play className="w-3 h-3 text-gray-400 shrink-0" />
+                      <span className="truncate font-medium text-gray-700">
+                        {status.currentVideo}
+                        {data.videoDescriptions[status.currentVideo] && (
+                          <span className="font-normal text-gray-500">
+                            {" "}({data.videoDescriptions[status.currentVideo]})
+                          </span>
+                        )}
+                      </span>
+                    </div>
                   )}
-                  {status.cacheStatus && <p>Cache: {status.cacheStatus}</p>}
-                  <p>Visto: {timeAgo(l.last_seen_at)}</p>
                 </div>
               </div>
             );
           })}
         </div>
       )}
+
+      <p className="text-xs text-gray-400 mt-6 text-center">
+        Esta pagina se actualiza automaticamente cada 30 segundos
+      </p>
     </div>
   );
 }

@@ -1,27 +1,47 @@
-import { NextResponse } from "next/server";
-import { getPlaylistSummaries, getAllLlamadores } from "@/shared/db/repository";
+import { NextRequest, NextResponse } from "next/server";
+import { getPlaylistSummaries, createPlaylist } from "@/shared/db/repository";
+import { playlistCreateSchema } from "@/shared/schemas";
 
-// GET /api/playlists — List all llamadores with playlist summaries
+// GET /api/playlists — List all playlists with video counts and assigned llamadores
 export async function GET() {
   try {
     const summaries = getPlaylistSummaries();
-    const llamadores = getAllLlamadores();
-
-    // Merge summaries with full llamador data
-    const result = summaries.map((s) => {
-      const llamador = llamadores.find((l) => l.nombre === s.nombre);
-      return {
-        ...s,
-        last_status: llamador?.last_status ?? null,
-        ip_address: llamador?.ip_address ?? null,
-      };
-    });
-
-    return NextResponse.json(result);
+    return NextResponse.json(summaries);
   } catch (error) {
     console.error("Error listing playlists:", error);
     return NextResponse.json(
       { error: "Error al listar playlists" },
+      { status: 500 }
+    );
+  }
+}
+
+// POST /api/playlists — Create a new playlist
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const parsed = playlistCreateSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Datos invalidos", details: parsed.error.issues },
+        { status: 400 }
+      );
+    }
+
+    const playlist = createPlaylist(parsed.data);
+    return NextResponse.json(playlist, { status: 201 });
+  } catch (error: unknown) {
+    const sqlError = error as { code?: string };
+    if (sqlError?.code === "SQLITE_CONSTRAINT_UNIQUE") {
+      return NextResponse.json(
+        { error: "Ya existe una playlist con ese nombre" },
+        { status: 409 }
+      );
+    }
+    console.error("Error creating playlist:", error);
+    return NextResponse.json(
+      { error: "Error al crear playlist" },
       { status: 500 }
     );
   }

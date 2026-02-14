@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getVideoById, deleteVideo, updateVideoDescription } from "@/shared/db/repository";
+import { getVideoById, deleteVideo, updateVideo } from "@/shared/db/repository";
 import { deleteVideoFile } from "@/shared/storage/video-storage";
 
 // GET /api/videos/[id] — Get video metadata
@@ -32,7 +32,7 @@ export async function GET(
   }
 }
 
-// PATCH /api/videos/[id] — Update video description
+// PATCH /api/videos/[id] — Update video metadata (description, tipo)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -45,9 +45,11 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const description = typeof body.description === "string" ? body.description : "";
 
-    const video = updateVideoDescription(videoId, description);
+    const video = updateVideo(videoId, {
+      description: typeof body.description === "string" ? body.description : undefined,
+      tipo: typeof body.tipo === "string" ? body.tipo : undefined,
+    });
     if (!video) {
       return NextResponse.json(
         { error: "Video no encontrado" },

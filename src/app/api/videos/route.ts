@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const description = (formData.get("description") as string) ?? "";
+    const tipo = (formData.get("tipo") as string) ?? "";
 
     if (!file) {
       return NextResponse.json(
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest) {
       sha256,
       size_bytes: sizeBytes,
       description,
+      tipo,
     });
 
     return NextResponse.json(video, { status: 201 });
