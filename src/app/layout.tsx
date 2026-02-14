@@ -15,6 +15,7 @@ import {
   Database,
   LogOut,
   MapPin,
+  BookOpen,
 } from "lucide-react";
 import { setupAgGridLicense } from "@/shared/config/ag-grid-license";
 
@@ -42,9 +43,9 @@ export default function RootLayout({
     setupAgGridLicense();
   }, []);
 
-  // Fetch current user (skip on login page)
+  // Fetch current user (skip on public pages)
   useEffect(() => {
-    if (pathname === "/login") {
+    if (pathname === "/login" || pathname === "/manual") {
       setCurrentUser(null);
       return;
     }
@@ -61,8 +62,8 @@ export default function RootLayout({
     router.push("/login");
   }
 
-  // Login page: no sidebar
-  if (pathname === "/login") {
+  // Public pages: no sidebar
+  if (pathname === "/login" || pathname === "/manual") {
     return (
       <html lang="es">
         <body className="bg-gray-50 text-gray-900 min-h-screen">
@@ -119,7 +120,19 @@ export default function RootLayout({
                 </button>
               </div>
             )}
-            <p className="text-xs text-gray-500">Video Repository v1.0</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500">Video Repository v1.0</p>
+              <a
+                href="/manual"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300"
+                title="Manual de Usuario"
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                Manual
+              </a>
+            </div>
           </div>
         </aside>
 

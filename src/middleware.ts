@@ -15,8 +15,8 @@ const PUBLIC_API_PREFIXES = [
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Login page is always public
-  if (pathname === "/login") {
+  // Public pages (no auth required)
+  if (pathname === "/login" || pathname === "/manual") {
     return NextResponse.next();
   }
 

@@ -38,9 +38,10 @@ ENV JWT_SECRET=${JWT_SECRET}
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy standalone build
+# Copy standalone build + public assets
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 
 # Create data directory for videos and database
 RUN mkdir -p /app/data/videos && chown -R nextjs:nodejs /app/data

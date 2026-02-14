@@ -492,7 +492,7 @@ function LlamadorEditModal({
         onClick={onClose}
       >
         <div
-          className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 shadow-xl"
+          className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="mb-4 flex items-center justify-between">
@@ -507,176 +507,175 @@ function LlamadorEditModal({
             </button>
           </div>
 
-          <div className="space-y-4">
-            {/* Playlist assignment */}
-            <div>
-              <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
-                <ListMusic className="h-4 w-4" />
-                Playlist asignada
-              </label>
-              <select
-                value={playlistId ?? ""}
-                onChange={(e) =>
-                  setPlaylistId(e.target.value ? Number(e.target.value) : null)
-                }
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-              >
-                <option value="">Sin playlist</option>
-                {playlists.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre} ({p.videoCount} videos)
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="flex gap-6">
+            {/* Left column: form fields */}
+            <div className="flex-1 space-y-4">
+              {/* Playlist assignment */}
+              <div>
+                <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
+                  <ListMusic className="h-4 w-4" />
+                  Playlist asignada
+                </label>
+                <select
+                  value={playlistId ?? ""}
+                  onChange={(e) =>
+                    setPlaylistId(e.target.value ? Number(e.target.value) : null)
+                  }
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                >
+                  <option value="">Sin playlist</option>
+                  {playlists.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre} ({p.videoCount} videos)
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Photo - larger preview */}
-            <div>
-              <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
-                <Camera className="h-4 w-4" />
-                Foto
-              </label>
-              <div className="flex items-center gap-3">
-                {foto ? (
-                  <img
-                    src={foto}
-                    alt="Foto"
-                    className="h-32 w-32 cursor-pointer rounded-lg object-cover transition-all hover:ring-2 hover:ring-blue-400"
-                    onClick={() => setShowLightbox(true)}
-                    title="Click para ver en grande"
-                  />
-                ) : (
-                  <div className="flex h-32 w-32 items-center justify-center rounded-lg bg-gray-100 text-gray-400">
-                    <Tv className="h-12 w-12" />
-                  </div>
-                )}
-                <div className="flex flex-col gap-1">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
-                  >
-                    {foto ? "Cambiar foto" : "Subir foto"}
-                  </button>
-                  {foto && (
-                    <button
-                      onClick={() => setFoto("")}
-                      className="text-xs text-red-500 hover:text-red-700"
-                    >
-                      Quitar foto
-                    </button>
-                  )}
-                </div>
+              {/* Ubicacion Principal - SELECT dropdown */}
+              <div>
+                <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
+                  <MapPin className="h-4 w-4" />
+                  Ubicacion Principal
+                </label>
+                <select
+                  value={ubicacionPrincipal}
+                  onChange={(e) => setUbicacionPrincipal(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                >
+                  <option value="">Sin ubicacion</option>
+                  {ubicaciones.map((u) => (
+                    <option key={u.id} value={u.nombre}>
+                      {u.nombre}
+                    </option>
+                  ))}
+                  {/* Show current value if not in list (legacy data) */}
+                  {ubicacionPrincipal &&
+                    !ubicaciones.some((u) => u.nombre === ubicacionPrincipal) && (
+                      <option value={ubicacionPrincipal}>
+                        {ubicacionPrincipal} (no registrada)
+                      </option>
+                    )}
+                </select>
+              </div>
+
+              {/* Ubicacion Secundaria */}
+              <div>
+                <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
+                  <MapPin className="h-4 w-4" />
+                  Ubicacion Secundaria
+                </label>
                 <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handlePhotoChange}
-                  className="hidden"
+                  type="text"
+                  value={ubicacionSecundaria}
+                  onChange={(e) => setUbicacionSecundaria(e.target.value)}
+                  placeholder="Ej: 2do Piso"
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                />
+              </div>
+
+              {/* Layout */}
+              <div>
+                <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
+                  <Monitor className="h-4 w-4" />
+                  Layout
+                </label>
+                <select
+                  value={layout}
+                  onChange={(e) => setLayout(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                >
+                  <option value="horizontal">Horizontal</option>
+                  <option value="vertical">Vertical</option>
+                </select>
+              </div>
+
+              {/* Marca/modelo TV */}
+              <div>
+                <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
+                  <Tv className="h-4 w-4" />
+                  Marca y modelo de TV
+                </label>
+                <input
+                  type="text"
+                  value={marcaModeloTv}
+                  onChange={(e) => setMarcaModeloTv(e.target.value)}
+                  placeholder='Ej: Samsung UN43AU7000 43"'
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                />
+              </div>
+
+              {/* Resolucion de pantalla */}
+              <div>
+                <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
+                  <Monitor className="h-4 w-4" />
+                  Resolucion de Pantalla
+                </label>
+                <input
+                  type="text"
+                  value={resolucionPantalla}
+                  onChange={(e) => setResolucionPantalla(e.target.value)}
+                  placeholder="Ej: 1920x1080"
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                />
+              </div>
+
+              {/* Observacion */}
+              <div>
+                <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
+                  <MessageSquare className="h-4 w-4" />
+                  Observacion
+                </label>
+                <textarea
+                  value={observacion}
+                  onChange={(e) => setObservacion(e.target.value)}
+                  placeholder="Notas, comentarios..."
+                  rows={2}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
                 />
               </div>
             </div>
 
-            {/* Ubicacion Principal - SELECT dropdown */}
-            <div>
-              <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
-                <MapPin className="h-4 w-4" />
-                Ubicacion Principal
+            {/* Right column: photo */}
+            <div className="flex w-48 shrink-0 flex-col items-center gap-3">
+              <label className="flex items-center gap-1 text-sm font-medium text-gray-700">
+                <Camera className="h-4 w-4" />
+                Foto
               </label>
-              <select
-                value={ubicacionPrincipal}
-                onChange={(e) => setUbicacionPrincipal(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
+              {foto ? (
+                <img
+                  src={foto}
+                  alt="Foto"
+                  className="h-44 w-44 cursor-pointer rounded-lg object-cover transition-all hover:ring-2 hover:ring-blue-400"
+                  onClick={() => setShowLightbox(true)}
+                  title="Click para ver en grande"
+                />
+              ) : (
+                <div className="flex h-44 w-44 items-center justify-center rounded-lg bg-gray-100 text-gray-400">
+                  <Tv className="h-14 w-14" />
+                </div>
+              )}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
               >
-                <option value="">Sin ubicacion</option>
-                {ubicaciones.map((u) => (
-                  <option key={u.id} value={u.nombre}>
-                    {u.nombre}
-                  </option>
-                ))}
-                {/* Show current value if not in list (legacy data) */}
-                {ubicacionPrincipal &&
-                  !ubicaciones.some((u) => u.nombre === ubicacionPrincipal) && (
-                    <option value={ubicacionPrincipal}>
-                      {ubicacionPrincipal} (no registrada)
-                    </option>
-                  )}
-              </select>
-            </div>
-
-            {/* Ubicacion Secundaria */}
-            <div>
-              <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
-                <MapPin className="h-4 w-4" />
-                Ubicacion Secundaria
-              </label>
+                {foto ? "Cambiar foto" : "Subir foto"}
+              </button>
+              {foto && (
+                <button
+                  onClick={() => setFoto("")}
+                  className="text-xs text-red-500 hover:text-red-700"
+                >
+                  Quitar foto
+                </button>
+              )}
               <input
-                type="text"
-                value={ubicacionSecundaria}
-                onChange={(e) => setUbicacionSecundaria(e.target.value)}
-                placeholder="Ej: 2do Piso"
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-              />
-            </div>
-
-            {/* Layout */}
-            <div>
-              <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
-                <Monitor className="h-4 w-4" />
-                Layout
-              </label>
-              <select
-                value={layout}
-                onChange={(e) => setLayout(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-              >
-                <option value="horizontal">Horizontal</option>
-                <option value="vertical">Vertical</option>
-              </select>
-            </div>
-
-            {/* Marca/modelo TV */}
-            <div>
-              <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
-                <Tv className="h-4 w-4" />
-                Marca y modelo de TV
-              </label>
-              <input
-                type="text"
-                value={marcaModeloTv}
-                onChange={(e) => setMarcaModeloTv(e.target.value)}
-                placeholder='Ej: Samsung UN43AU7000 43"'
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-              />
-            </div>
-
-            {/* Resolucion de pantalla */}
-            <div>
-              <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
-                <Monitor className="h-4 w-4" />
-                Resolucion de Pantalla
-              </label>
-              <input
-                type="text"
-                value={resolucionPantalla}
-                onChange={(e) => setResolucionPantalla(e.target.value)}
-                placeholder="Ej: 1920x1080"
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-              />
-            </div>
-
-            {/* Observacion */}
-            <div>
-              <label className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
-                <MessageSquare className="h-4 w-4" />
-                Observacion
-              </label>
-              <textarea
-                value={observacion}
-                onChange={(e) => setObservacion(e.target.value)}
-                placeholder="Notas, comentarios..."
-                rows={2}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handlePhotoChange}
+                className="hidden"
               />
             </div>
           </div>

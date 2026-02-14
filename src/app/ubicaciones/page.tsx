@@ -10,7 +10,6 @@ import {
   Search,
   Download,
   X,
-  Check,
 } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { DataGrid } from "@/shared/ui/DataGrid";
@@ -33,9 +32,8 @@ export default function UbicacionesPage() {
   const [newNombre, setNewNombre] = useState("");
   const [addError, setAddError] = useState("");
 
-  // Inline editing
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editNombre, setEditNombre] = useState("");
+  // Edit modal
+  const [editingUbicacion, setEditingUbicacion] = useState<Ubicacion | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,23 +78,6 @@ export default function UbicacionesPage() {
     }
   }
 
-  async function handleEditSave(id: number) {
-    const nombre = editNombre.trim();
-    if (!nombre) return;
-    const res = await fetch("/api/ubicaciones", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, nombre }),
-    });
-    if (res.ok) {
-      setEditingId(null);
-      load();
-    } else {
-      const data = await res.json();
-      alert(data.error || "Error al actualizar");
-    }
-  }
-
   // AG-Grid column definitions
   const columnDefs = useMemo<ColDef<Ubicacion>[]>(
     () => [
@@ -111,13 +92,6 @@ export default function UbicacionesPage() {
         headerName: "Nombre",
         flex: 2,
         minWidth: 250,
-        cellRenderer: (params: ICellRendererParams<Ubicacion>) => {
-          if (!params.data) return null;
-          if (editingId === params.data.id) {
-            return null; // Handled by full row render below
-          }
-          return params.value;
-        },
       },
       {
         field: "created_at",
@@ -143,46 +117,10 @@ export default function UbicacionesPage() {
         cellRenderer: (params: ICellRendererParams<Ubicacion>) => {
           if (!params.data) return null;
           const u = params.data;
-
-          if (editingId === u.id) {
-            return (
-              <div className="flex items-center gap-1 h-full">
-                <input
-                  type="text"
-                  value={editNombre}
-                  onChange={(e) => setEditNombre(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleEditSave(u.id);
-                    if (e.key === "Escape") setEditingId(null);
-                  }}
-                  className="rounded border px-2 py-1 text-sm w-48"
-                  autoFocus
-                />
-                <button
-                  onClick={() => handleEditSave(u.id)}
-                  className="rounded p-1 text-green-600 hover:bg-green-50"
-                  title="Guardar"
-                >
-                  <Check className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setEditingId(null)}
-                  className="rounded p-1 text-gray-400 hover:bg-gray-100"
-                  title="Cancelar"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            );
-          }
-
           return (
             <div className="flex items-center gap-1 h-full">
               <button
-                onClick={() => {
-                  setEditingId(u.id);
-                  setEditNombre(u.nombre);
-                }}
+                onClick={() => setEditingUbicacion(u)}
                 className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-600"
                 title="Editar"
               >
@@ -200,7 +138,7 @@ export default function UbicacionesPage() {
         },
       },
     ],
-    [editingId, editNombre]
+    []
   );
 
   // Export setup
@@ -346,6 +284,114 @@ export default function UbicacionesPage() {
           paginationPageSize={50}
           onDisplayedRowCountChange={setDisplayedCount}
         />
+      </div>
+
+      {/* Edit modal */}
+      {editingUbicacion && (
+        <EditUbicacionModal
+          ubicacion={editingUbicacion}
+          onClose={() => setEditingUbicacion(null)}
+          onSaved={() => {
+            setEditingUbicacion(null);
+            load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Edit Ubicacion Modal ──
+
+function EditUbicacionModal({
+  ubicacion,
+  onClose,
+  onSaved,
+}: {
+  ubicacion: Ubicacion;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [nombre, setNombre] = useState(ubicacion.nombre);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    const trimmed = nombre.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    setError("");
+    const res = await fetch("/api/ubicaciones", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: ubicacion.id, nombre: trimmed }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      onSaved();
+    } else {
+      const data = await res.json();
+      setError(data.error || "Error al actualizar");
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Editar Ubicacion</h2>
+          <button
+            onClick={onClose}
+            className="rounded p-1 hover:bg-gray-100"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Nombre
+          </label>
+          <input
+            type="text"
+            value={nombre}
+            onChange={(e) => {
+              setNombre(e.target.value);
+              setError("");
+            }}
+            onKeyDown={(e) => e.key === "Enter" && handleSave()}
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            autoFocus
+          />
+        </div>
+
+        {error && (
+          <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-lg border px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !nombre.trim()}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:bg-gray-400"
+          >
+            {saving ? "Guardando..." : "Guardar"}
+          </button>
+        </div>
       </div>
     </div>
   );
