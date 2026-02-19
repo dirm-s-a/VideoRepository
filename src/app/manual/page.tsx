@@ -268,9 +268,17 @@ export default function ManualPage() {
             <NavItem icon={Monitor} label="Llamadores" desc="Dispositivos registrados y su configuracion" />
             <NavItem icon={MapPin} label="Ubicaciones" desc="ABM de ubicaciones principales" />
             <NavItem icon={BarChart3} label="Estadisticas" desc="Historial de reproducciones de videos" />
-            <NavItem icon={Users} label="Usuarios" desc="Gestion de cuentas de acceso" />
-            <NavItem icon={Database} label="Base de Datos" desc="Backup, restauracion y reinicio" />
+            <NavItem icon={Users} label="Usuarios" desc="Gestion de cuentas de acceso (solo admin)" />
+            <NavItem icon={Database} label="Base de Datos" desc="Backup, restauracion y reinicio (solo admin)" />
           </div>
+
+          <InfoBox type="info">
+            Las secciones <strong>Usuarios</strong> y <strong>Base de
+            Datos</strong> solo son visibles para usuarios con rol{" "}
+            <strong>admin</strong>. Los usuarios con rol &quot;user&quot; no
+            ven estas opciones en el sidebar ni pueden acceder a sus URLs
+            directamente.
+          </InfoBox>
 
           <p className="mt-4">
             La seccion activa se resalta con fondo azul. En la parte inferior
@@ -750,6 +758,143 @@ export default function ManualPage() {
 
           <ImagePlaceholder name="llamadores" caption="Grilla de llamadores con filtros, agrupamiento y botones de exportacion" />
           <ImagePlaceholder name="llamador-config" caption="Modal de configuracion de un llamador" />
+
+          <h3 className="mb-3 mt-6 text-lg font-semibold text-gray-800">
+            Configuracion Central del Llamador
+          </h3>
+          <p>
+            Ademas de los campos basicos del dispositivo (playlist, ubicacion,
+            layout, etc.), cada llamador puede tener una{" "}
+            <strong>Configuracion Central</strong> que controla su apariencia
+            y comportamiento: marquesina, clima, video y voz. Esta
+            configuracion se gestiona desde el repositorio y se sincroniza
+            automaticamente al llamador.
+          </p>
+          <p className="mt-3">
+            En el modal de configuracion, debajo de los campos basicos,
+            encontrara el acordeon{" "}
+            <strong>Configuracion Central</strong>. Haga clic para expandirlo.
+            Si el llamador ya tiene configuracion activa, vera la etiqueta
+            verde <span className="mx-1 inline-block rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">ACTIVA</span>{" "}
+            junto al titulo.
+          </p>
+
+          <h4 className="mb-2 mt-4 font-semibold text-gray-700">
+            Pestañas del editor
+          </h4>
+          <p>
+            El editor organiza la configuracion en pestañas. Cada pestaña
+            muestra un numero con la cantidad de campos configurados. Los
+            tipos de campos incluyen texto, numeros, colores (con selector
+            visual), booleanos (toggle) y selectores desplegables.
+          </p>
+          <div className="my-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <MiniCard icon={Tv} label="Marquesina" desc="Texto, colores, fuente, alto" color="blue" />
+            <MiniCard icon={Clock} label="Clima" desc="Ciudad, fecha/hora, colores" color="green" />
+            <MiniCard icon={Film} label="Video" desc="Silenciar audio global" color="purple" />
+            <MiniCard icon={Settings} label="Voz" desc="TTS, idioma, ding-dong" color="emerald" />
+            <MiniCard icon={FileText} label="JSON" desc="Vista raw completa" color="blue" />
+          </div>
+
+          <p className="mt-2 font-medium text-gray-700">Marquesina</p>
+          <p>
+            Configura el texto que se desplaza en la parte superior o inferior
+            de la pantalla del llamador. Campos: texto del mensaje, color de
+            texto, color de fondo, fuente tipografica, tamaño en pixeles,
+            estilo (normal, negrita, italica) y porcentaje de alto de pantalla
+            que ocupa.
+          </p>
+
+          <p className="mt-3 font-medium text-gray-700">Clima</p>
+          <p>
+            Configura el widget de clima y fecha/hora. Campos: ciudad y pais
+            (ej: &quot;Ramos Mejia,AR&quot;), mostrar fecha/hora, formato 24h o 12h,
+            tamaño de fuente, porcentaje de alto, y colores de fondo y texto
+            independientes para ubicacion y clima.
+          </p>
+
+          <p className="mt-3 font-medium text-gray-700">Video</p>
+          <p>
+            Control global de audio: permite silenciar los videos en el
+            llamador. Al activar la configuracion de video, automaticamente se
+            habilita el uso del repositorio central.
+          </p>
+
+          <p className="mt-3 font-medium text-gray-700">Voz</p>
+          <p>
+            Configura los anuncios de voz (TTS) al llamar pacientes. Campos:
+            habilitar/deshabilitar voz, seleccion de voz TTS (Amazon Polly
+            Neural/Standard o Piper local via Docker), codigo de idioma (ej:
+            es-AR), activar sonido ding-dong previo al anuncio, pausa en
+            segundos despues del anuncio, y ruta al archivo de sonido
+            ding-dong.
+          </p>
+
+          <p className="mt-3 font-medium text-gray-700">JSON</p>
+          <p>
+            Muestra la configuracion completa en formato JSON editable.
+            Permite revision avanzada o edicion directa del contenido raw.
+            Los cambios realizados en JSON se reflejan en las demas pestañas
+            y viceversa.
+          </p>
+
+          <ImagePlaceholder name="llamador-config-tabs" caption="Editor de Configuracion Central con la pestaña Marquesina activa" />
+
+          <h4 className="mb-2 mt-5 font-semibold text-gray-700">
+            Importar configuracion desde llamador
+          </h4>
+          <p>
+            Si un llamador fue configurado localmente (editando su archivo
+            YAML directamente), puede importar esa configuracion al
+            repositorio central con el boton{" "}
+            <InlineButton icon={Download} label="Importar desde llamador" />{" "}
+            en la barra de pestañas del editor. El sistema descarga la
+            configuracion que el llamador reporto en su ultimo heartbeat y la
+            carga en el editor. Si ya existe configuracion central, se pedira
+            confirmacion antes de reemplazarla.
+          </p>
+
+          <h4 className="mb-2 mt-4 font-semibold text-gray-700">
+            Limpiar configuracion
+          </h4>
+          <p>
+            El boton <span className="font-medium text-red-600">Limpiar todo</span>{" "}
+            elimina toda la configuracion central del llamador. Esto hace que
+            el llamador vuelva a usar su configuracion local (archivo YAML)
+            sin overrides del repositorio.
+          </p>
+
+          <h4 className="mb-2 mt-4 font-semibold text-gray-700">
+            Flujo de sincronizacion
+          </h4>
+          <p>
+            Al guardar, la configuracion se almacena en el repositorio central.
+            Los llamadores configurados para usar el repositorio central
+            consultan periodicamente (intervalo configurable, por defecto 5
+            minutos) si hay cambios. Cuando detectan una configuracion
+            central, la aplican como override sobre su configuracion local:
+          </p>
+          <div className="my-3 flex items-center gap-2 text-sm text-gray-600">
+            <span className="rounded bg-gray-100 px-2 py-1 font-mono text-xs">YAML local</span>
+            <span>&lt;</span>
+            <span className="rounded bg-blue-100 px-2 py-1 font-mono text-xs">Config central</span>
+            <span>&lt;</span>
+            <span className="rounded bg-amber-100 px-2 py-1 font-mono text-xs">Variables de entorno</span>
+          </div>
+          <p className="text-sm text-gray-500">
+            Prioridad de menor a mayor: la configuracion local es la base,
+            la central la sobreescribe, y las variables de entorno tienen
+            maxima prioridad.
+          </p>
+
+          <InfoBox type="info">
+            Los cambios en el editor no afectan al llamador de forma
+            inmediata. Se aplican en el proximo ciclo de sincronizacion
+            automatica. Para verificar, puede comprobar el campo
+            &quot;Ultima sincronizacion&quot; en la grilla de llamadores.
+          </InfoBox>
+
+          <ImagePlaceholder name="llamador-config-voz" caption="Pestaña Voz: configuracion de TTS, idioma y sonido ding-dong" />
         </Section>
 
         {/* ── 8. Ubicaciones ── */}
@@ -910,9 +1055,39 @@ export default function ManualPage() {
         <Section id="usuarios" icon={Users} title="Usuarios" number={10}>
           <p>
             Administracion de las cuentas de usuario que pueden acceder al panel
-            de administracion. Cualquier usuario autenticado puede ver y
-            gestionar otros usuarios.
+            de administracion. Esta seccion solo es accesible para usuarios con
+            rol <strong>admin</strong>.
           </p>
+
+          <h3 className="mb-3 mt-6 text-lg font-semibold text-gray-800">
+            Roles de usuario
+          </h3>
+          <p>
+            El sistema maneja dos roles de acceso:
+          </p>
+          <div className="my-4 grid grid-cols-2 gap-4">
+            <div className="rounded-lg border bg-purple-50 p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <Shield className="h-5 w-5 text-purple-600" />
+                <h4 className="font-semibold text-purple-800">Admin</h4>
+              </div>
+              <p className="text-sm text-purple-700">
+                Acceso completo a todas las secciones, incluyendo Usuarios y
+                Base de Datos. Puede crear y gestionar otros usuarios y
+                cambiar roles.
+              </p>
+            </div>
+            <div className="rounded-lg border bg-gray-50 p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <Users className="h-5 w-5 text-gray-600" />
+                <h4 className="font-semibold text-gray-800">Usuario</h4>
+              </div>
+              <p className="text-sm text-gray-600">
+                Acceso a Dashboard, Videos, Playlists, Llamadores, Ubicaciones
+                y Estadisticas. No puede ver Usuarios ni Base de Datos.
+              </p>
+            </div>
+          </div>
 
           <h3 className="mb-3 mt-6 text-lg font-semibold text-gray-800">
             Crear un usuario
@@ -923,8 +1098,9 @@ export default function ManualPage() {
               <InlineButton icon={Plus} label="Nuevo Usuario" />
             </Step>
             <Step n={2}>
-              Ingrese un <strong>nombre de usuario</strong> y una{" "}
-              <strong>clave</strong> (minimo 4 caracteres)
+              Ingrese un <strong>nombre de usuario</strong>, una{" "}
+              <strong>clave</strong> (minimo 4 caracteres) y seleccione el{" "}
+              <strong>rol</strong> (Admin o Usuario)
             </Step>
             <Step n={3}>
               Haga clic en <strong>Crear</strong>
@@ -932,11 +1108,30 @@ export default function ManualPage() {
           </StepList>
 
           <h3 className="mb-3 mt-6 text-lg font-semibold text-gray-800">
+            Cambiar rol
+          </h3>
+          <p>
+            En la columna <strong>Rol</strong> de la grilla, cada usuario
+            muestra un badge de color: purpura para <strong>Admin</strong> y
+            gris para <strong>Usuario</strong>. Para cambiar el rol de un
+            usuario, haga clic en el boton{" "}
+            <InlineButton icon={Shield} label="Hacer Admin" /> o{" "}
+            <InlineButton icon={Shield} label="Quitar Admin" /> en la columna
+            de acciones.
+          </p>
+
+          <InfoBox type="warning">
+            No se puede quitar el rol admin al usuario <Code>admin</Code>{" "}
+            original del sistema. Este usuario siempre mantiene el rol de
+            administrador.
+          </InfoBox>
+
+          <h3 className="mb-3 mt-6 text-lg font-semibold text-gray-800">
             Cambiar clave
           </h3>
           <p>
             Haga clic en el boton{" "}
-            <InlineButton icon={KeyRound} label="Cambiar Clave" /> de la fila
+            <InlineButton icon={KeyRound} label="Clave" /> de la fila
             del usuario. Se abre un modal donde ingresa la nueva clave (minimo
             4 caracteres) y confirma con <strong>Guardar</strong>.
           </p>
@@ -945,8 +1140,7 @@ export default function ManualPage() {
             Eliminar un usuario
           </h3>
           <p>
-            Haga clic en el boton{" "}
-            <InlineButton icon={Trash2} label="Eliminar" /> de la fila del
+            Haga clic en el icono <InlineIcon icon={Trash2} /> de la fila del
             usuario. Se pedira confirmacion.
           </p>
 
@@ -966,21 +1160,26 @@ export default function ManualPage() {
               &quot;tu&quot; si es el actual)
             </Feature>
             <Feature>
+              <strong>Rol</strong> — Badge purpura (Admin) o gris (Usuario)
+            </Feature>
+            <Feature>
               <strong>Creado</strong> — Fecha y hora de creacion de la cuenta
             </Feature>
             <Feature>
-              <strong>Acciones</strong> — Cambiar Clave y Eliminar
+              <strong>Acciones</strong> — Cambiar rol, Cambiar clave y
+              Eliminar
             </Feature>
           </ul>
 
-          <ImagePlaceholder name="usuarios" caption="Gestion de usuarios con grilla y acciones" />
+          <ImagePlaceholder name="usuarios" caption="Gestion de usuarios con roles, grilla y acciones" />
         </Section>
 
         {/* ── 11. Base de Datos ── */}
         <Section id="database" icon={Database} title="Base de Datos" number={11}>
           <p>
             La seccion de Base de Datos permite realizar operaciones de respaldo,
-            restauracion y reinicio del sistema. Estas operaciones afectan toda
+            restauracion y reinicio del sistema. Solo es accesible para usuarios
+            con rol <strong>admin</strong>. Las operaciones afectan toda
             la informacion almacenada: videos (metadatos), playlists,
             llamadores, ubicaciones, usuarios y estadisticas.
           </p>
@@ -1024,6 +1223,46 @@ export default function ManualPage() {
           </InfoBox>
 
           <h3 className="mb-3 mt-6 text-lg font-semibold text-gray-800">
+            Backup Programado
+          </h3>
+          <p>
+            El sistema puede realizar backups automaticos diarios. La tarjeta
+            verde <strong>Backup Programado</strong> permite configurar:
+          </p>
+          <ul className="my-3 space-y-1">
+            <Feature>
+              <strong>Activar/Desactivar</strong> — Toggle para habilitar o
+              deshabilitar el backup automatico
+            </Feature>
+            <Feature>
+              <strong>Hora del backup</strong> — Selector de hora (0-23). Por
+              defecto se ejecuta a las 3:00 AM
+            </Feature>
+            <Feature>
+              <strong>Retencion</strong> — Cuantos dias conservar los backups
+              antiguos (1-90 dias, por defecto 7)
+            </Feature>
+          </ul>
+          <p className="mt-3">
+            El boton{" "}
+            <InlineButton icon={Play} label="Ejecutar Ahora" />{" "}
+            permite disparar un backup manualmente en cualquier momento, sin
+            esperar a la hora programada.
+          </p>
+          <p className="mt-3">
+            Debajo de la configuracion se muestra una lista con los{" "}
+            <strong>backups existentes</strong>, incluyendo el nombre del
+            archivo y su fecha de creacion. Los backups se almacenan en la
+            carpeta <Code>data/backups/</Code> del servidor.
+          </p>
+
+          <InfoBox type="info">
+            Los backups automaticos se crean usando <Code>VACUUM INTO</Code>,
+            un metodo seguro que genera una copia consistente de la base de
+            datos sin interferir con las operaciones en curso.
+          </InfoBox>
+
+          <h3 className="mb-3 mt-6 text-lg font-semibold text-gray-800">
             Reiniciar Base de Datos
           </h3>
           <p>
@@ -1038,7 +1277,7 @@ export default function ManualPage() {
             de proceder. Tras el reinicio se redirige a la pantalla de login.
           </InfoBox>
 
-          <ImagePlaceholder name="database" caption="Pantalla de backup, restauracion y reinicio de base de datos" />
+          <ImagePlaceholder name="database" caption="Pantalla de backup, restauracion, backup programado y reinicio" />
         </Section>
 
         {/* ── 12. Exportacion de Datos ── */}

@@ -43,6 +43,7 @@ const sections = [
   { id: "voz-tts", label: "Voz y Audio (TTS)", icon: Mic },
   { id: "video", label: "Reproductor de Video", icon: Film },
   { id: "repositorio", label: "Repositorio Central de Videos", icon: Server },
+  { id: "config-sync", label: "Sincronizacion de Configuracion", icon: RefreshCw },
   { id: "clima", label: "Widget de Clima", icon: Cloud },
   { id: "marquesina", label: "Marquesina", icon: Type },
   { id: "config-panel", label: "Panel de Configuracion", icon: Settings },
@@ -584,8 +585,135 @@ export default function ManualLlamadorPage() {
           </InfoBox>
         </Section>
 
-        {/* ── 9. Widget de Clima ── */}
-        <Section id="clima" icon={Cloud} title="Widget de Clima" number={9}>
+        {/* ── 9. Sincronizacion de Configuracion ── */}
+        <Section id="config-sync" icon={RefreshCw} title="Sincronizacion de Configuracion" number={9}>
+          <p>
+            Ademas de sincronizar videos, el llamador puede recibir su{" "}
+            <strong>configuracion de apariencia</strong> desde el Repositorio
+            Central (Video Repository). Esto permite gestionar centralmente
+            la marquesina, clima, voz y video de cada llamador sin acceder
+            fisicamente al equipo.
+          </p>
+
+          <h3 className="mb-3 mt-6 text-lg font-semibold text-gray-800">
+            Como funciona
+          </h3>
+          <StepList>
+            <Step n={1}>
+              Un administrador configura la apariencia del llamador desde el
+              panel del Video Repository (seccion Llamadores &rarr; boton de
+              configuracion)
+            </Step>
+            <Step n={2}>
+              El llamador consulta periodicamente al repositorio si hay una
+              configuracion remota disponible para su nombre
+            </Step>
+            <Step n={3}>
+              Si se detecta una configuracion remota, el llamador la aplica
+              automaticamente sobre su configuracion local
+            </Step>
+          </StepList>
+
+          <h3 className="mb-3 mt-6 text-lg font-semibold text-gray-800">
+            Prioridad de configuracion (3 capas)
+          </h3>
+          <p>
+            La configuracion final del llamador se compone de tres capas,
+            donde cada una puede sobreescribir a la anterior:
+          </p>
+          <div className="my-4 space-y-2">
+            <div className="flex items-center gap-3 rounded-lg border bg-gray-50 px-4 py-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">1</span>
+              <div>
+                <p className="font-semibold text-gray-800">YAML local</p>
+                <p className="text-sm text-gray-500">
+                  Archivo <Code>configuracion.yml</Code> en el servidor del
+                  llamador. Base de la configuracion.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border bg-blue-50 px-4 py-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-200 text-xs font-bold text-blue-700">2</span>
+              <div>
+                <p className="font-semibold text-blue-800">Configuracion remota</p>
+                <p className="text-sm text-blue-600">
+                  Configuracion centralizada desde el Video Repository.
+                  Sobreescribe los campos que define.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border bg-emerald-50 px-4 py-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-200 text-xs font-bold text-emerald-700">3</span>
+              <div>
+                <p className="font-semibold text-emerald-800">Variables de entorno</p>
+                <p className="text-sm text-emerald-600">
+                  Tienen la maxima prioridad. Se definen en{" "}
+                  <Code>docker-compose.yml</Code> y sobreescriben todo lo
+                  anterior.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <h3 className="mb-3 mt-6 text-lg font-semibold text-gray-800">
+            Configuracion reportada
+          </h3>
+          <p>
+            Para facilitar la gestion, el llamador reporta su configuracion
+            completa actual al repositorio central. Desde el Video Repository,
+            un administrador puede usar el boton{" "}
+            <strong>&ldquo;Importar desde llamador&rdquo;</strong> para copiar
+            la configuracion de un llamador activo y editarla centralmente.
+          </p>
+
+          <h3 className="mb-3 mt-6 text-lg font-semibold text-gray-800">
+            Indicadores en el panel de configuracion
+          </h3>
+          <p>
+            Cuando un campo esta controlado por una fuente externa, el panel
+            de configuracion del llamador muestra un <strong>badge</strong>{" "}
+            junto al nombre del campo y lo marca como solo lectura:
+          </p>
+          <div className="my-4 space-y-2">
+            <div className="flex items-center gap-3 rounded-lg border bg-gray-50 px-4 py-3">
+              <span className="shrink-0 rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+                CENTRAL
+              </span>
+              <p className="text-sm text-gray-600">
+                El campo esta gestionado desde el repositorio central.
+                Muestra &ldquo;Gestionado desde el repositorio central&rdquo;
+                como descripcion. Para modificarlo, edite la configuracion
+                en el Video Repository.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border bg-gray-50 px-4 py-3">
+              <span className="shrink-0 rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                ENTORNO
+              </span>
+              <p className="text-sm text-gray-600">
+                El campo esta fijado por una variable de entorno del
+                contenedor Docker (<Code>docker-compose.yml</Code>).
+                Tiene la maxima prioridad y no puede cambiarse desde
+                ningun panel.
+              </p>
+            </div>
+          </div>
+          <p>
+            Los campos sin badge son editables localmente. Si un campo tiene
+            badge, su valor se aplica automaticamente y no puede modificarse
+            desde el panel del llamador.
+          </p>
+
+          <InfoBox type="tip">
+            La sincronizacion de configuracion usa el mismo intervalo que la
+            sincronizacion de videos (<Code>intervaloSyncMinutos</Code>). Si
+            el repositorio central no esta activo, esta funcion se desactiva
+            automaticamente.
+          </InfoBox>
+        </Section>
+
+        {/* ── 10. Widget de Clima ── */}
+        <Section id="clima" icon={Cloud} title="Widget de Clima" number={10}>
           <p>
             La barra superior muestra informacion meteorologica en tiempo real
             para la ciudad configurada. Se actualiza cada 30 minutos.
@@ -637,8 +765,8 @@ export default function ManualLlamadorPage() {
           </InfoBox>
         </Section>
 
-        {/* ── 10. Marquesina ── */}
-        <Section id="marquesina" icon={Type} title="Marquesina" number={10}>
+        {/* ── 11. Marquesina ── */}
+        <Section id="marquesina" icon={Type} title="Marquesina" number={11}>
           <p>
             La marquesina es un banner en la parte inferior de la pantalla con
             texto que se desplaza continuamente de derecha a izquierda.
@@ -662,12 +790,33 @@ export default function ManualLlamadorPage() {
           </div>
         </Section>
 
-        {/* ── 11. Panel de Configuracion ── */}
-        <Section id="config-panel" icon={Settings} title="Panel de Configuracion" number={11}>
+        {/* ── 12. Panel de Configuracion ── */}
+        <Section id="config-panel" icon={Settings} title="Panel de Configuracion" number={12}>
           <p>
             El panel de configuracion permite ajustar todos los parametros del
             llamador en tiempo real, sin necesidad de editar archivos
             manualmente.
+          </p>
+
+          <h3 className="mb-3 mt-6 text-lg font-semibold text-gray-800">
+            Configuracion inicial (Setup)
+          </h3>
+          <p>
+            La primera vez que se despliega un llamador sin datos de
+            instalacion configurados, aparece automaticamente un{" "}
+            <strong>modal de configuracion inicial</strong> que solicita los
+            tres campos obligatorios:
+          </p>
+          <div className="my-4 space-y-2">
+            <ConfigItem label="nombreLlamador" desc="Nombre unico del llamador (ej: llamadorPB). Usado para identificarlo en el repositorio" />
+            <ConfigItem label="llamarComo" desc="Identificador para la API REST del backend (ej: LLAMADOR_1)" />
+            <ConfigItem label="idServicio" desc="ID numerico del servicio en el backend" />
+          </div>
+          <p>
+            Una vez completados estos campos y guardados, el modal se cierra
+            y el llamador comienza a operar normalmente. Estos campos tambien
+            pueden editarse luego desde el panel de configuracion (seccion
+            General).
           </p>
 
           <h3 className="mb-3 mt-6 text-lg font-semibold text-gray-800">
@@ -783,8 +932,8 @@ export default function ManualLlamadorPage() {
           <ImagePlaceholder name="importar-datos" caption="Formulario de datos de instalacion al importar un layout" />
         </Section>
 
-        {/* ── 12. Modo Simulacion (Mock) ── */}
-        <Section id="mock" icon={TestTube} title="Modo Simulacion (Mock)" number={12}>
+        {/* ── 13. Modo Simulacion (Mock) ── */}
+        <Section id="mock" icon={TestTube} title="Modo Simulacion (Mock)" number={13}>
           <p>
             El modo simulacion permite probar el llamador sin conexion al
             backend real. Genera llamados ficticios automaticamente.
@@ -834,8 +983,8 @@ export default function ManualLlamadorPage() {
           </div>
         </Section>
 
-        {/* ── 13. Monitor de Servicio ── */}
-        <Section id="heartbeat" icon={Shield} title="Monitor de Servicio (Heartbeat)" number={13}>
+        {/* ── 14. Monitor de Servicio ── */}
+        <Section id="heartbeat" icon={Shield} title="Monitor de Servicio (Heartbeat)" number={14}>
           <p>
             El llamador se registra automaticamente en el backend como un
             servicio activo y envia señales periodicas de &ldquo;estoy vivo&rdquo;
@@ -874,8 +1023,8 @@ export default function ManualLlamadorPage() {
           </div>
         </Section>
 
-        {/* ── 14. Despliegue y Docker ── */}
-        <Section id="deploy" icon={HardDrive} title="Despliegue y Docker" number={14}>
+        {/* ── 15. Despliegue y Docker ── */}
+        <Section id="deploy" icon={HardDrive} title="Despliegue y Docker" number={15}>
           <p>
             El llamador se distribuye como una imagen Docker que incluye la
             aplicacion web y opcionalmente el servicio de voz Piper TTS.
