@@ -10,23 +10,26 @@ import {
   X,
   Search,
   Download,
+  Shield,
+  User,
 } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { DataGrid } from "@/shared/ui/DataGrid";
 import { useDataGridExport } from "@/shared/ui/useDataGridExport";
 
-interface User {
+interface UserData {
   id: number;
   username: string;
+  role: string;
   created_at: string;
 }
 
 export default function UsuariosPage() {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserData[]>([]);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [changePasswordUser, setChangePasswordUser] = useState<User | null>(
+  const [changePasswordUser, setChangePasswordUser] = useState<UserData | null>(
     null
   );
   const [quickFilter, setQuickFilter] = useState("");
@@ -53,7 +56,28 @@ export default function UsuariosPage() {
     load();
   }, [load]);
 
-  async function handleDelete(user: User) {
+  async function handleToggleRole(user: UserData) {
+    const newRole = user.role === "admin" ? "user" : "admin";
+    const msg = newRole === "admin"
+      ? `Promover a "${user.username}" como administrador?`
+      : `Quitar permisos de administrador a "${user.username}"?`;
+    if (!confirm(msg)) return;
+    const res = await fetch(`/api/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: newRole }),
+    });
+    if (res.ok) {
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, role: newRole } : u))
+      );
+    } else {
+      const err = await res.json();
+      alert(err.error || "Error al cambiar rol");
+    }
+  }
+
+  async function handleDelete(user: UserData) {
     if (!confirm(`Eliminar usuario "${user.username}"?`)) return;
     const res = await fetch(`/api/users/${user.id}`, { method: "DELETE" });
     if (res.ok) {
@@ -64,14 +88,14 @@ export default function UsuariosPage() {
     }
   }
 
-  const columnDefs = useMemo<ColDef<User>[]>(
+  const columnDefs = useMemo<ColDef<UserData>[]>(
     () => [
       {
         field: "username",
         headerName: "Usuario",
         flex: 2,
         minWidth: 200,
-        cellRenderer: (params: ICellRendererParams<User>) => {
+        cellRenderer: (params: ICellRendererParams<UserData>) => {
           if (!params.data) return null;
           return (
             <div className="flex items-center gap-2 h-full">
@@ -79,6 +103,30 @@ export default function UsuariosPage() {
               {params.data.id === currentUserId && (
                 <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-600">
                   tu
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        field: "role",
+        headerName: "Rol",
+        width: 130,
+        cellRenderer: (params: ICellRendererParams<UserData>) => {
+          if (!params.data) return null;
+          const isAdminRole = params.data.role === "admin";
+          return (
+            <div className="flex items-center gap-1.5 h-full">
+              {isAdminRole ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-700">
+                  <Shield className="h-3 w-3" />
+                  Admin
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+                  <User className="h-3 w-3" />
+                  Usuario
                 </span>
               )}
             </div>
@@ -103,31 +151,46 @@ export default function UsuariosPage() {
       },
       {
         headerName: "Acciones",
-        width: 220,
+        width: 300,
         sortable: false,
         filter: false,
         pinned: "right",
-        cellRenderer: (params: ICellRendererParams<User>) => {
+        cellRenderer: (params: ICellRendererParams<UserData>) => {
           if (!params.data) return null;
           const user = params.data;
-          const isAdmin = user.username.toLowerCase() === "admin";
+          const isSeedAdmin = user.username.toLowerCase() === "admin";
           const isSelf = user.id === currentUserId;
           return (
             <div className="flex items-center gap-1 h-full">
+              <button
+                onClick={() => handleToggleRole(user)}
+                disabled={isSeedAdmin}
+                className="flex items-center gap-1 rounded px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-30"
+                title={
+                  isSeedAdmin
+                    ? "El usuario admin siempre es administrador"
+                    : user.role === "admin"
+                      ? "Quitar rol admin"
+                      : "Promover a admin"
+                }
+              >
+                <Shield className="h-3.5 w-3.5" />
+                {user.role === "admin" ? "Quitar Admin" : "Hacer Admin"}
+              </button>
               <button
                 onClick={() => setChangePasswordUser(user)}
                 className="flex items-center gap-1 rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
                 title="Cambiar clave"
               >
                 <KeyRound className="h-3.5 w-3.5" />
-                Cambiar Clave
+                Clave
               </button>
               <button
                 onClick={() => handleDelete(user)}
-                disabled={isSelf || isAdmin}
+                disabled={isSelf || isSeedAdmin}
                 className="flex items-center gap-1 rounded px-2 py-1 text-xs text-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
                 title={
-                  isAdmin
+                  isSeedAdmin
                     ? "El usuario admin no se puede eliminar"
                     : isSelf
                       ? "No se puede eliminar el usuario actual"
@@ -135,7 +198,6 @@ export default function UsuariosPage() {
                 }
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                Eliminar
               </button>
             </div>
           );
@@ -150,6 +212,7 @@ export default function UsuariosPage() {
     () => [
       { header: "ID", field: "id", width: 10 },
       { header: "Usuario", field: "username", width: 30 },
+      { header: "Rol", field: "role", width: 15 },
       { header: "Creado", field: "created_at", width: 25 },
     ],
     []
@@ -240,7 +303,7 @@ export default function UsuariosPage() {
 
       {/* AG Grid */}
       <div className="flex-1 overflow-hidden rounded-lg border bg-white">
-        <DataGrid<User>
+        <DataGrid<UserData>
           rowData={users}
           columnDefs={columnDefs}
           height="calc(100vh - 280px)"
@@ -286,6 +349,7 @@ function CreateUserModal({
 }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState("user");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -298,7 +362,7 @@ function CreateUserModal({
       const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, role }),
       });
 
       if (res.ok) {
@@ -359,6 +423,19 @@ function CreateUserModal({
               autoComplete="new-password"
             />
           </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Rol
+            </label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+            >
+              <option value="user">Usuario</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
 
           {error && (
             <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -395,7 +472,7 @@ function ChangePasswordModal({
   onClose,
   onSaved,
 }: {
-  user: User;
+  user: UserData;
   onClose: () => void;
   onSaved: () => void;
 }) {

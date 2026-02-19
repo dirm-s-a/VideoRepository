@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { username, password } = parsed.data;
+    const { username, password, role } = parsed.data;
 
     if (getUserByUsername(username)) {
       return NextResponse.json(
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     const passwordHash = await hashPassword(password);
-    const user = createUser(username, passwordHash);
+    const user = createUser(username, passwordHash, role);
     return NextResponse.json(user, { status: 201 });
   } catch (error) {
     console.error("Error creating user:", error);

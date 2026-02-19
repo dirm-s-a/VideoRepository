@@ -43,6 +43,7 @@ export async function PATCH(
       marca_modelo_tv: body.marca_modelo_tv,
       foto: body.foto,
       playlist_id: body.playlist_id,
+      config_json: body.config_json,
     });
 
     if (!llamador) {

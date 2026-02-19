@@ -15,16 +15,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { nombreLlamador, ipAddress, ...statusData } = parsed.data;
+    const { nombreLlamador, uuid, ipAddress, reportedConfig, ...statusData } = parsed.data;
 
-    // Ensure llamador is registered
-    upsertLlamador({ nombre: nombreLlamador, ip_address: ipAddress });
+    console.log(`[status] nombre=${nombreLlamador} uuid=${uuid ?? "NONE"} ip=${ipAddress ?? "NONE"} config=${reportedConfig ? "YES" : "no"}`);
 
-    // Update status
+    // Ensure llamador is registered (UUID-first matching prevents duplicates)
+    upsertLlamador({ nombre: nombreLlamador, ip_address: ipAddress, uuid });
+
+    // Update status (includes reported config if present)
     updateLlamadorStatus(
       nombreLlamador,
       JSON.stringify(statusData),
-      ipAddress
+      ipAddress,
+      reportedConfig ? JSON.stringify(reportedConfig) : undefined
     );
 
     return NextResponse.json({ ok: true });

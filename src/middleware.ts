@@ -12,6 +12,10 @@ const PUBLIC_API_PREFIXES = [
   "/api/video-plays",
 ];
 
+// Routes that require admin role
+const ADMIN_PAGES = ["/usuarios", "/database"];
+const ADMIN_API_PREFIXES = ["/api/users", "/api/backup"];
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -38,6 +42,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Device config sync: GET /api/config/[nombre]
+  if (pathname.startsWith("/api/config/") && request.method === "GET") {
+    return NextResponse.next();
+  }
+
   // Check JWT cookie
   const token = request.cookies.get(COOKIE_NAME)?.value;
 
@@ -49,7 +58,22 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, secret);
+
+    // Check admin-only routes
+    const isAdminPage = ADMIN_PAGES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+    const isAdminApi = ADMIN_API_PREFIXES.some((p) => pathname.startsWith(p));
+
+    if (isAdminPage || isAdminApi) {
+      const role = (payload.role as string) || "user";
+      if (role !== "admin") {
+        if (pathname.startsWith("/api/")) {
+          return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+        }
+        return NextResponse.redirect(new URL("/", request.url));
+      }
+    }
+
     return NextResponse.next();
   } catch {
     if (pathname.startsWith("/api/")) {

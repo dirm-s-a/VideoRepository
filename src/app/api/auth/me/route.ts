@@ -15,5 +15,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     id: Number(payload.sub),
     username: payload.username,
+    role: payload.role || "user",
   });
 }

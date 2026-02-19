@@ -4,7 +4,6 @@ import {
   getPlaylistVideos,
   setPlaylistVideos,
   getPlaylistForLlamador,
-  upsertLlamador,
   getLlamador,
   updatePlaylist,
   deletePlaylist,
@@ -54,7 +53,6 @@ export async function GET(
       });
     } else {
       // Backward-compatible llamador sync path
-      upsertLlamador({ nombre: decoded });
       const videos = getPlaylistForLlamador(decoded);
       const llamadorData = getLlamador(decoded);
       return NextResponse.json({

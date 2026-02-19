@@ -25,11 +25,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const token = await createToken(user.id, user.username);
+    const token = await createToken(user.id, user.username, user.role || "user");
 
     const response = NextResponse.json({
       ok: true,
-      user: { id: user.id, username: user.username },
+      user: { id: user.id, username: user.username, role: user.role || "user" },
     });
 
     response.cookies.set(COOKIE_NAME, token, {

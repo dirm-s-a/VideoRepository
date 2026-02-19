@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   Monitor,
-  Plus,
   RefreshCw,
   Trash2,
   Settings,
@@ -15,11 +14,15 @@ import {
   ListMusic,
   Search,
   Download,
+  ChevronDown,
+  ChevronRight,
+  FileJson,
 } from "lucide-react";
 import { timeAgo, parseUtc } from "@/components/format-utils";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { DataGrid } from "@/shared/ui/DataGrid";
 import { useDataGridExport } from "@/shared/ui/useDataGridExport";
+import ConfigTabEditor from "./ConfigTabEditor";
 
 interface LlamadorInfo {
   nombre: string;
@@ -53,8 +56,6 @@ export default function LlamadoresPage() {
   const [llamadores, setLlamadores] = useState<LlamadorInfo[]>([]);
   const [playlists, setPlaylists] = useState<PlaylistOption[]>([]);
   const [ubicaciones, setUbicaciones] = useState<UbicacionOption[]>([]);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newName, setNewName] = useState("");
   const [editingLlamador, setEditingLlamador] = useState<LlamadorInfo | null>(
     null
   );
@@ -81,14 +82,6 @@ export default function LlamadoresPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  async function handleAddLlamador() {
-    if (!newName.trim()) return;
-    await fetch(`/api/playlists/${encodeURIComponent(newName.trim())}`);
-    setNewName("");
-    setShowAdd(false);
-    load();
-  }
 
   async function handleDelete(nombre: string) {
     if (!confirm(`Eliminar llamador "${nombre}"?`)) return;
@@ -263,48 +256,13 @@ export default function LlamadoresPage() {
     <div className="flex h-full flex-col p-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Llamadores</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowAdd(!showAdd)}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" />
-            Agregar Llamador
-          </button>
-          <button
-            onClick={load}
-            className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </button>
-        </div>
+        <button
+          onClick={load}
+          className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
       </div>
-
-      {showAdd && (
-        <div className="mb-4 flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Nombre del llamador (ej: llamador3ero)"
-            className="flex-1 rounded-lg border px-3 py-2 text-sm"
-            onKeyDown={(e) => e.key === "Enter" && handleAddLlamador()}
-            autoFocus
-          />
-          <button
-            onClick={handleAddLlamador}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-          >
-            Crear
-          </button>
-          <button
-            onClick={() => setShowAdd(false)}
-            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
-          >
-            Cancelar
-          </button>
-        </div>
-      )}
 
       {/* Quick filter + Export */}
       <div className="mb-4 flex items-center justify-between">
@@ -425,10 +383,15 @@ function LlamadorEditModal({
   );
   const [saving, setSaving] = useState(false);
   const [showLightbox, setShowLightbox] = useState(false);
+  const [showConfigEditor, setShowConfigEditor] = useState(false);
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const configJsonRef = useRef("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleSave() {
     setSaving(true);
+
+    // Save llamador fields
     const res = await fetch(
       `/api/llamadores/${encodeURIComponent(llamador.nombre)}`,
       {
@@ -446,6 +409,28 @@ function LlamadorEditModal({
         }),
       }
     );
+
+    // Save config if the editor was opened
+    if (showConfigEditor && configLoaded) {
+      const configText = configJsonRef.current.trim();
+      if (configText) {
+        await fetch(
+          `/api/config/${encodeURIComponent(llamador.nombre)}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: configText,
+          }
+        );
+      } else {
+        // Clear config
+        await fetch(
+          `/api/config/${encodeURIComponent(llamador.nombre)}`,
+          { method: "DELETE" }
+        );
+      }
+    }
+
     setSaving(false);
     if (res.ok) {
       onSaved();
@@ -678,6 +663,40 @@ function LlamadorEditModal({
                 className="hidden"
               />
             </div>
+          </div>
+
+          {/* Central Config Editor */}
+          <div className="mt-6 border-t pt-4">
+            <button
+              type="button"
+              onClick={() => setShowConfigEditor(!showConfigEditor)}
+              className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-blue-600"
+            >
+              {showConfigEditor ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+              <FileJson className="h-4 w-4" />
+              Configuración Central
+              {configJsonRef.current.trim() && (
+                <span className="ml-1 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
+                  ACTIVA
+                </span>
+              )}
+            </button>
+            <p className="mt-1 text-xs text-gray-400">
+              Configuración que se aplica como override en los llamadores con repositorio central
+            </p>
+
+            {showConfigEditor && (
+              <ConfigTabEditor
+                nombre={llamador.nombre}
+                configLoaded={configLoaded}
+                onLoaded={() => setConfigLoaded(true)}
+                configJsonRef={configJsonRef}
+              />
+            )}
           </div>
 
           {/* Buttons */}

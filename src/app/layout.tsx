@@ -26,8 +26,8 @@ const navItems = [
   { href: "/llamadores", label: "Llamadores", icon: Monitor },
   { href: "/ubicaciones", label: "Ubicaciones", icon: MapPin },
   { href: "/estadisticas", label: "Estadisticas", icon: BarChart3 },
-  { href: "/usuarios", label: "Usuarios", icon: Users },
-  { href: "/database", label: "Base de Datos", icon: Database },
+  { href: "/usuarios", label: "Usuarios", icon: Users, adminOnly: true },
+  { href: "/database", label: "Base de Datos", icon: Database, adminOnly: true },
 ];
 
 export default function RootLayout({
@@ -38,6 +38,7 @@ export default function RootLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string>("user");
 
   useEffect(() => {
     setupAgGridLicense();
@@ -47,12 +48,16 @@ export default function RootLayout({
   useEffect(() => {
     if (pathname === "/login" || pathname === "/manual" || pathname === "/manualLlamador") {
       setCurrentUser(null);
+      setUserRole("user");
       return;
     }
     fetch("/api/auth/me")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data?.username) setCurrentUser(data.username);
+        if (data?.username) {
+          setCurrentUser(data.username);
+          setUserRole(data.role || "user");
+        }
       })
       .catch(() => {});
   }, [pathname]);
@@ -83,7 +88,7 @@ export default function RootLayout({
             <h1 className="text-lg font-bold">Video Repository</h1>
           </div>
           <nav className="flex-1 p-2">
-            {navItems.map((item) => {
+            {navItems.filter((item) => !item.adminOnly || userRole === "admin").map((item) => {
               const Icon = item.icon;
               const isActive =
                 pathname === item.href ||

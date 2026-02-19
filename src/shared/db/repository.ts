@@ -6,10 +6,12 @@ import bcrypt from "bcryptjs";
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "repository.db");
 const VIDEOS_DIR = path.join(DATA_DIR, "videos");
+const BACKUPS_DIR = path.join(DATA_DIR, "backups");
 
 // Ensure directories exist
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(VIDEOS_DIR, { recursive: true });
+fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 
 let _db: Database.Database | null = null;
 
@@ -106,6 +108,22 @@ function initSchema(db: Database.Database) {
   }
   if (!colNames.has("resolucion_pantalla")) {
     db.exec("ALTER TABLE llamadores ADD COLUMN resolucion_pantalla TEXT DEFAULT ''");
+  }
+  if (!colNames.has("config_json")) {
+    db.exec("ALTER TABLE llamadores ADD COLUMN config_json TEXT DEFAULT ''");
+  }
+  if (!colNames.has("config_updated_at")) {
+    db.exec("ALTER TABLE llamadores ADD COLUMN config_updated_at TEXT DEFAULT ''");
+  }
+  if (!colNames.has("uuid")) {
+    db.exec("ALTER TABLE llamadores ADD COLUMN uuid TEXT");
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_llamadores_uuid ON llamadores(uuid) WHERE uuid IS NOT NULL");
+  }
+  if (!colNames.has("reported_config")) {
+    db.exec("ALTER TABLE llamadores ADD COLUMN reported_config TEXT DEFAULT ''");
+  }
+  if (!colNames.has("reported_config_at")) {
+    db.exec("ALTER TABLE llamadores ADD COLUMN reported_config_at TEXT DEFAULT ''");
   }
   // Migrate old ubicacion data to ubicacion_principal
   db.exec("UPDATE llamadores SET ubicacion_principal = ubicacion WHERE ubicacion != '' AND ubicacion_principal = ''");
@@ -251,11 +269,19 @@ function initSchema(db: Database.Database) {
     )
   `);
 
+  // 6b. Add role column to users if missing
+  const userCols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+  const userColNames = new Set(userCols.map(c => c.name));
+  if (!userColNames.has("role")) {
+    db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+    db.exec("UPDATE users SET role = 'admin' WHERE username = 'admin' COLLATE NOCASE");
+  }
+
   // Seed default admin user if no users exist
   const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
   if (userCount.count === 0) {
     const hash = bcrypt.hashSync("admin", 10);
-    db.prepare("INSERT INTO users (username, password_hash) VALUES (?, ?)").run("admin", hash);
+    db.prepare("INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'admin')").run("admin", hash);
   }
 }
 
@@ -568,6 +594,11 @@ export interface LlamadorRow {
   marca_modelo_tv: string;
   foto: string;
   playlist_id: number | null;
+  config_json: string;
+  config_updated_at: string;
+  uuid: string | null;
+  reported_config: string;
+  reported_config_at: string;
 }
 
 export function getAllLlamadores(): LlamadorRow[] {
@@ -582,17 +613,59 @@ export function upsertLlamador(data: {
   nombre: string;
   descripcion?: string;
   ip_address?: string;
+  uuid?: string;
 }): void {
-  getDb()
-    .prepare(
-      `INSERT INTO llamadores (nombre, descripcion, ip_address, last_seen_at)
-       VALUES (?, ?, ?, datetime('now'))
-       ON CONFLICT(nombre) DO UPDATE SET
-         descripcion = COALESCE(excluded.descripcion, descripcion),
-         ip_address = COALESCE(excluded.ip_address, ip_address),
-         last_seen_at = datetime('now')`
-    )
-    .run(data.nombre, data.descripcion ?? "", data.ip_address ?? null);
+  const db = getDb();
+
+  if (data.uuid) {
+    // UUID-first matching: prevents duplicates on rename
+    const byUuid = db.prepare("SELECT nombre FROM llamadores WHERE uuid = ?").get(data.uuid) as { nombre: string } | undefined;
+
+    if (byUuid) {
+      // Existing llamador found by UUID — update (handles rename)
+      const oldName = byUuid.nombre;
+      db.prepare(
+        `UPDATE llamadores SET nombre = ?, ip_address = COALESCE(?, ip_address),
+         last_seen_at = datetime('now') WHERE uuid = ?`
+      ).run(data.nombre, data.ip_address ?? null, data.uuid);
+
+      // Cascade rename in video_plays history
+      if (oldName !== data.nombre) {
+        db.prepare("UPDATE video_plays SET llamador_nombre = ? WHERE llamador_nombre = ?")
+          .run(data.nombre, oldName);
+        console.log(`[Llamador] Renamed "${oldName}" → "${data.nombre}" (uuid: ${data.uuid})`);
+      }
+      return;
+    }
+
+    // Check if nombre exists without UUID (old llamador → adopt UUID)
+    const byName = db.prepare("SELECT nombre FROM llamadores WHERE nombre = ? AND uuid IS NULL").get(data.nombre) as { nombre: string } | undefined;
+    if (byName) {
+      db.prepare(
+        `UPDATE llamadores SET uuid = ?, ip_address = COALESCE(?, ip_address),
+         last_seen_at = datetime('now') WHERE nombre = ?`
+      ).run(data.uuid, data.ip_address ?? null, data.nombre);
+      console.log(`[Llamador] Adopted UUID for existing "${data.nombre}"`);
+      return;
+    }
+
+    // New llamador with UUID
+    db.prepare(
+      `INSERT INTO llamadores (nombre, descripcion, ip_address, uuid, last_seen_at)
+       VALUES (?, ?, ?, ?, datetime('now'))`
+    ).run(data.nombre, data.descripcion ?? "", data.ip_address ?? null, data.uuid);
+    return;
+  }
+
+  // No UUID: legacy behavior (upsert by nombre)
+  db.prepare(
+    `INSERT INTO llamadores (nombre, descripcion, ip_address, last_seen_at)
+     VALUES (?, ?, ?, datetime('now'))
+     ON CONFLICT(nombre) DO UPDATE SET
+       descripcion = COALESCE(excluded.descripcion, descripcion),
+       ip_address = COALESCE(excluded.ip_address, ip_address),
+       last_seen_at = datetime('now')`
+  ).run(data.nombre, data.descripcion ?? "", data.ip_address ?? null);
 }
 
 export function updateLlamador(
@@ -606,6 +679,7 @@ export function updateLlamador(
     marca_modelo_tv?: string;
     foto?: string;
     playlist_id?: number | null;
+    config_json?: string;
   }
 ): LlamadorRow | undefined {
   const fields: string[] = [];
@@ -643,6 +717,11 @@ export function updateLlamador(
     fields.push("playlist_id = ?");
     values.push(data.playlist_id);
   }
+  if (data.config_json !== undefined) {
+    fields.push("config_json = ?");
+    values.push(data.config_json);
+    fields.push("config_updated_at = datetime('now')");
+  }
 
   if (fields.length === 0) return getLlamador(nombre);
 
@@ -661,14 +740,26 @@ export function deleteLlamador(nombre: string): boolean {
 export function updateLlamadorStatus(
   nombre: string,
   status: string,
-  ipAddress?: string
+  ipAddress?: string,
+  reportedConfig?: string
 ): void {
-  getDb()
-    .prepare(
-      `UPDATE llamadores SET last_status = ?, last_seen_at = datetime('now'),
-       ip_address = COALESCE(?, ip_address) WHERE nombre = ?`
-    )
-    .run(status, ipAddress ?? null, nombre);
+  if (reportedConfig) {
+    getDb()
+      .prepare(
+        `UPDATE llamadores SET last_status = ?, last_seen_at = datetime('now'),
+         ip_address = COALESCE(?, ip_address),
+         reported_config = ?, reported_config_at = datetime('now')
+         WHERE nombre = ?`
+      )
+      .run(status, ipAddress ?? null, reportedConfig, nombre);
+  } else {
+    getDb()
+      .prepare(
+        `UPDATE llamadores SET last_status = ?, last_seen_at = datetime('now'),
+         ip_address = COALESCE(?, ip_address) WHERE nombre = ?`
+      )
+      .run(status, ipAddress ?? null, nombre);
+  }
 }
 
 export function getLlamadorSummaries(): (LlamadorRow & {
@@ -684,6 +775,59 @@ export function getLlamadorSummaries(): (LlamadorRow & {
        ORDER BY l.nombre`
     )
     .all() as (LlamadorRow & { playlistNombre: string | null; videoCount: number })[];
+}
+
+// ── Llamador config operations ──
+
+export interface LlamadorConfigResult {
+  nombreLlamador: string;
+  updatedAt: string;
+  config: Record<string, unknown>;
+}
+
+export function getLlamadorConfig(nombre: string): LlamadorConfigResult | null {
+  const row = getDb()
+    .prepare("SELECT nombre, config_json, config_updated_at FROM llamadores WHERE nombre = ?")
+    .get(nombre) as { nombre: string; config_json: string; config_updated_at: string } | undefined;
+
+  if (!row || !row.config_json) return null;
+
+  try {
+    const config = JSON.parse(row.config_json);
+    return {
+      nombreLlamador: row.nombre,
+      updatedAt: row.config_updated_at || "",
+      config,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function updateLlamadorConfig(
+  nombre: string,
+  configJson: string
+): LlamadorConfigResult | null {
+  // Empty string = clear config
+  if (!configJson.trim()) {
+    getDb()
+      .prepare("UPDATE llamadores SET config_json = '', config_updated_at = '' WHERE nombre = ?")
+      .run(nombre);
+    return getLlamadorConfig(nombre);
+  }
+
+  // Validate JSON
+  try {
+    JSON.parse(configJson);
+  } catch {
+    return null;
+  }
+
+  getDb()
+    .prepare("UPDATE llamadores SET config_json = ?, config_updated_at = datetime('now') WHERE nombre = ?")
+    .run(configJson, nombre);
+
+  return getLlamadorConfig(nombre);
 }
 
 // ── Video play tracking ──
@@ -789,12 +933,13 @@ export interface UserRow {
   id: number;
   username: string;
   password_hash: string;
+  role: string;
   created_at: string;
 }
 
 export function getAllUsers(): Omit<UserRow, "password_hash">[] {
   return getDb()
-    .prepare("SELECT id, username, created_at FROM users ORDER BY username")
+    .prepare("SELECT id, username, role, created_at FROM users ORDER BY username")
     .all() as Omit<UserRow, "password_hash">[];
 }
 
@@ -812,13 +957,14 @@ export function getUserById(id: number): UserRow | undefined {
 
 export function createUser(
   username: string,
-  passwordHash: string
+  passwordHash: string,
+  role: string = "user"
 ): Omit<UserRow, "password_hash"> {
   const result = getDb()
-    .prepare("INSERT INTO users (username, password_hash) VALUES (?, ?)")
-    .run(username, passwordHash);
+    .prepare("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)")
+    .run(username, passwordHash, role);
   const user = getUserById(Number(result.lastInsertRowid))!;
-  return { id: user.id, username: user.username, created_at: user.created_at };
+  return { id: user.id, username: user.username, role: user.role, created_at: user.created_at };
 }
 
 export function updateUserPassword(id: number, passwordHash: string): boolean {
@@ -828,9 +974,154 @@ export function updateUserPassword(id: number, passwordHash: string): boolean {
   return result.changes > 0;
 }
 
+export function updateUserRole(id: number, role: string): boolean {
+  const result = getDb()
+    .prepare("UPDATE users SET role = ? WHERE id = ?")
+    .run(role, id);
+  return result.changes > 0;
+}
+
 export function deleteUser(id: number): boolean {
   const result = getDb()
     .prepare("DELETE FROM users WHERE id = ?")
     .run(id);
   return result.changes > 0;
+}
+
+// ── Scheduled backups ──
+
+const BACKUP_CONFIG_PATH = path.join(DATA_DIR, "backup-config.json");
+
+export interface BackupConfig {
+  enabled: boolean;
+  hour: number;      // 0-23
+  keepDays: number;   // days to retain
+}
+
+const DEFAULT_BACKUP_CONFIG: BackupConfig = {
+  enabled: true,
+  hour: 3,
+  keepDays: 7,
+};
+
+export function getBackupConfig(): BackupConfig {
+  try {
+    if (fs.existsSync(BACKUP_CONFIG_PATH)) {
+      const raw = JSON.parse(fs.readFileSync(BACKUP_CONFIG_PATH, "utf-8"));
+      return { ...DEFAULT_BACKUP_CONFIG, ...raw };
+    }
+  } catch { /* use defaults */ }
+  return { ...DEFAULT_BACKUP_CONFIG };
+}
+
+export function saveBackupConfig(config: BackupConfig): void {
+  fs.writeFileSync(BACKUP_CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+  // Restart scheduler with new settings
+  restartBackupScheduler();
+}
+
+export function getBackupsDir(): string {
+  return BACKUPS_DIR;
+}
+
+/** Create a safe atomic backup using VACUUM INTO */
+export function createScheduledBackup(): string | null {
+  try {
+    const db = getDb();
+    const config = getBackupConfig();
+    const now = new Date();
+    const stamp = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-");
+    const filename = `repository-${stamp}.db`;
+    const backupPath = path.join(BACKUPS_DIR, filename);
+
+    // Skip if today's backup already exists
+    if (fs.existsSync(backupPath)) {
+      console.log(`[Backup] Ya existe: ${filename}`);
+      return filename;
+    }
+
+    db.exec(`VACUUM INTO '${backupPath.replace(/'/g, "''")}'`);
+    console.log(`[Backup] Creado: ${filename}`);
+
+    // Rotate: remove backups older than keepDays
+    const cutoff = Date.now() - config.keepDays * 24 * 60 * 60 * 1000;
+    for (const file of fs.readdirSync(BACKUPS_DIR)) {
+      if (!file.startsWith("repository-") || !file.endsWith(".db")) continue;
+      const filePath = path.join(BACKUPS_DIR, file);
+      const stat = fs.statSync(filePath);
+      if (stat.mtimeMs < cutoff) {
+        fs.unlinkSync(filePath);
+        console.log(`[Backup] Eliminado (antiguo): ${file}`);
+      }
+    }
+
+    return filename;
+  } catch (err) {
+    console.error("[Backup] Error:", err);
+    return null;
+  }
+}
+
+/** List existing backups */
+export function listBackups(): { filename: string; size: number; date: string }[] {
+  if (!fs.existsSync(BACKUPS_DIR)) return [];
+  return fs.readdirSync(BACKUPS_DIR)
+    .filter(f => f.startsWith("repository-") && f.endsWith(".db"))
+    .map(f => {
+      const stat = fs.statSync(path.join(BACKUPS_DIR, f));
+      return { filename: f, size: stat.size, date: stat.mtime.toISOString() };
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// ── Backup scheduler ──
+
+let _schedulerTimer: ReturnType<typeof setTimeout> | null = null;
+let _schedulerInterval: ReturnType<typeof setInterval> | null = null;
+
+function clearScheduler() {
+  if (_schedulerTimer) { clearTimeout(_schedulerTimer); _schedulerTimer = null; }
+  if (_schedulerInterval) { clearInterval(_schedulerInterval); _schedulerInterval = null; }
+}
+
+function startBackupScheduler() {
+  clearScheduler();
+  const config = getBackupConfig();
+
+  if (!config.enabled) {
+    console.log("[Backup] Programación desactivada");
+    return;
+  }
+
+  function msUntilNextRun(): number {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(config.hour, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) {
+      next.setDate(next.getDate() + 1);
+    }
+    return next.getTime() - now.getTime();
+  }
+
+  const ms = msUntilNextRun();
+  const hours = Math.round(ms / 3600000 * 10) / 10;
+  console.log(`[Backup] Próximo backup en ${hours}h (${config.hour}:00), retención ${config.keepDays} días`);
+
+  _schedulerTimer = setTimeout(() => {
+    createScheduledBackup();
+    _schedulerInterval = setInterval(createScheduledBackup, 24 * 60 * 60 * 1000);
+  }, ms);
+}
+
+export function restartBackupScheduler() {
+  startBackupScheduler();
+}
+
+// Auto-start scheduler when this module loads in production
+if (process.env.NODE_ENV === "production") {
+  startBackupScheduler();
 }

@@ -10,13 +10,15 @@ const TOKEN_EXPIRY = "24h";
 export interface TokenPayload {
   sub: string;
   username: string;
+  role: string;
 }
 
 export async function createToken(
   userId: number,
-  username: string
+  username: string,
+  role: string
 ): Promise<string> {
-  return new SignJWT({ username } as Record<string, unknown>)
+  return new SignJWT({ username, role } as Record<string, unknown>)
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(String(userId))
     .setIssuedAt()
@@ -32,6 +34,7 @@ export async function verifyToken(
     return {
       sub: payload.sub as string,
       username: payload.username as string,
+      role: (payload.role as string) || "user",
     };
   } catch {
     return null;

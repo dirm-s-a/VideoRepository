@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { insertVideoPlay, getVideoPlays } from "@/shared/db/repository";
+import { insertVideoPlay, getVideoPlays, getDb } from "@/shared/db/repository";
 import { videoPlayReportSchema } from "@/shared/schemas";
 
 // POST /api/video-plays — Record a video play event
@@ -15,8 +15,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Resolve nombre by UUID for consistency (handles rename between status and play report)
+    let llamadorNombre = parsed.data.nombreLlamador;
+    if (parsed.data.uuid) {
+      const byUuid = getDb()
+        .prepare("SELECT nombre FROM llamadores WHERE uuid = ?")
+        .get(parsed.data.uuid) as { nombre: string } | undefined;
+      if (byUuid) {
+        llamadorNombre = byUuid.nombre;
+      }
+    }
+
     insertVideoPlay({
-      llamadorNombre: parsed.data.nombreLlamador,
+      llamadorNombre,
       videoFilename: parsed.data.videoFilename,
       videoId: parsed.data.videoId,
       durationSeconds: parsed.data.durationSeconds,

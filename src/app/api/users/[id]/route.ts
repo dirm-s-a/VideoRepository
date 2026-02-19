@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserById, updateUserPassword, deleteUser } from "@/shared/db/repository";
+import { getUserById, updateUserPassword, updateUserRole, deleteUser } from "@/shared/db/repository";
 import { hashPassword, verifyToken, COOKIE_NAME } from "@/shared/auth";
 import { changePasswordSchema } from "@/shared/schemas";
 
@@ -33,8 +33,23 @@ export async function PATCH(
       );
     }
 
-    const passwordHash = await hashPassword(parsed.data.password);
-    updateUserPassword(userId, passwordHash);
+    // Update password if provided
+    if (parsed.data.password) {
+      const passwordHash = await hashPassword(parsed.data.password);
+      updateUserPassword(userId, passwordHash);
+    }
+
+    // Update role if provided
+    if (parsed.data.role) {
+      // Prevent removing admin from the seed "admin" user
+      if (user.username.toLowerCase() === "admin" && parsed.data.role !== "admin") {
+        return NextResponse.json(
+          { error: "No se puede cambiar el rol del usuario admin" },
+          { status: 400 }
+        );
+      }
+      updateUserRole(userId, parsed.data.role);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

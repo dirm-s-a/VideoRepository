@@ -56,11 +56,13 @@ export type PlaylistCreate = z.infer<typeof playlistCreateSchema>;
 
 export const llamadorStatusSchema = z.object({
   nombreLlamador: z.string(),
+  uuid: z.string().optional(),
   currentVideo: z.string().optional(),
   cacheStatus: z.enum(["synced", "syncing", "error", "idle"]),
   cachedCount: z.number(),
   totalCount: z.number(),
   ipAddress: z.string().optional(),
+  reportedConfig: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type LlamadorStatus = z.infer<typeof llamadorStatusSchema>;
@@ -92,6 +94,7 @@ export type LlamadorSummary = z.infer<typeof llamadorSummarySchema>;
 
 export const videoPlayReportSchema = z.object({
   nombreLlamador: z.string(),
+  uuid: z.string().optional(),
   videoFilename: z.string(),
   videoId: z.number().optional(),
   durationSeconds: z.number().optional(),
@@ -117,6 +120,7 @@ export const createUserSchema = z.object({
     .string()
     .min(4, "Minimo 4 caracteres")
     .max(100, "Maximo 100 caracteres"),
+  role: z.enum(["admin", "user"]).optional().default("user"),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
@@ -125,7 +129,9 @@ export const changePasswordSchema = z.object({
   password: z
     .string()
     .min(4, "Minimo 4 caracteres")
-    .max(100, "Maximo 100 caracteres"),
+    .max(100, "Maximo 100 caracteres")
+    .optional(),
+  role: z.enum(["admin", "user"]).optional(),
 });
 
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
